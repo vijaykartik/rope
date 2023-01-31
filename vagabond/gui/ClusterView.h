@@ -19,6 +19,8 @@
 #ifndef __vagabond__ClusterView__
 #define __vagabond__ClusterView__
 
+#include <thread>
+
 #include <vagabond/gui/elements/IndexResponder.h>
 #include <vagabond/core/Progressor.h>
 #include <vagabond/core/Manager.h>

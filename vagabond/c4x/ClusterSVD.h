@@ -19,6 +19,7 @@
 #ifndef __vagabond__ClusterSVD__
 #define __vagabond__ClusterSVD__
 
+#include <mutex>
 #include "Cluster.h"
 
 template <class DG>
