@@ -99,7 +99,8 @@ inline void from_json(const json &j, VisualPreferences &value)
 {
 	value._cAlphaTrace = j["calpha"];
 	value._ballAndStick = j["ball_and_stick"];
-	value._displayBallSticks = j["bas_residues"];
+    std::vector<ResidueId> displayBallSticks = j.at("bas_residues");
+	value._displayBallSticks = displayBallSticks;
 }
 
 #endif
