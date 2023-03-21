@@ -5,7 +5,7 @@ version: 2.1
 executors:
   ubuntu:
     machine:
-      - image: ubuntu-2004:202010-01
+      image: ubuntu-2004:202010-01
 #        auth:
 #            username: mydockerhub-user
 #            password: $DOCKERHUB_PASSWORD
