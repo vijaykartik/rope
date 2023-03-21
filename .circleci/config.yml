@@ -4,8 +4,8 @@ version: 2.1
 
 executors:
   ubuntu:
-    machine:
-      image: ubuntu-2004:202010-01
+    docker:
+      - image: helenginn/ubuntu-sys
 #        auth:
 #            username: mydockerhub-user
 #            password: $DOCKERHUB_PASSWORD
