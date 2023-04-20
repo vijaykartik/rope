@@ -22,6 +22,13 @@ inline bool is_glm_vec_sane(T vec)
 float bond_rotation_on_distance_gradient(const glm::vec3 &a, const glm::vec3 &b,
                                          const glm::vec3 &c, const glm::vec3 &d);
 
+glm::mat3x3 unit_vec_rotation(glm::vec3 axis, double radians);
+
+/** Rotate vector (vec1) around axis (axis) by angle theta. Find value of
+* theta for which the angle between (vec1) and (vec2) is minimised. */
+glm::mat3x3 closest_rot_mat(glm::vec3 vec1, glm::vec3 vec2, 
+                                   glm::vec3 axis, float *best, bool unity);
+
 double measure_bond_torsion(glm::vec3 positions[4]);
 
 /** matrix from three bond lengths and three bond angles, aligned with
@@ -49,6 +56,12 @@ glm::mat3x3 bond_aligned_matrix(double a, double b, double c,
 glm::mat3x3 mat3x3_from_unit_cell(double a, double b, double c, 
                                   double alpha, double beta, double gamma);
 
+/** updates torsion basis matrix based on real space atom positions
+ * @param target matrix to update
+ * @param self current atom's position
+ * @param prev previous atom's position
+ * @param the child atom's position, whose matrix needs updating
+ */
 void torsion_basis(glm::mat4x4 &target, const glm::vec4 &self, 
                    const glm::vec3 &prev, const glm::vec4 &next);
 

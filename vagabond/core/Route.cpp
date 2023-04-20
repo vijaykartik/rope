@@ -17,36 +17,37 @@
 // Please email: vagabond @ hginn.co.uk for more details.
 
 #include "Route.h"
-#include "Molecule.h"
-#include "BondSequence.h"
+#include "Polymer.h"
+#include "Grapher.h"
+#include "TorsionBasis.h"
 #include "MetadataGroup.h"
 #include <vagabond/c4x/Cluster.h>
 
-Route::Route(Molecule *mol, Cluster<MetadataGroup> *cluster, int dims) 
-: StructureModification(mol, 1, dims)
+Route::Route(Instance *inst, Cluster<MetadataGroup> *cluster, int dims) 
+: StructureModification(inst, 1, dims)
 {
 	_cluster = cluster;
 	_pType = BondCalculator::PipelineForceField;
 	_torsionType = TorsionBasis::TypeSimple;
+	instance()->load();
 }
 
 Route::~Route()
 {
-	molecule()->unload();
+	instance()->unload();
 }
 
 void Route::setup()
 {
-	molecule()->load();
 
 	if (_rawDest.size() == 0 && destinationSize() == 0)
 	{
 		throw std::runtime_error("No destination set for route");
 	}
 
-	_fullAtoms = _molecule->currentAtoms();
-	_mask.clear();
+	_fullAtoms = _instance->currentAtoms();
 	startCalculator();
+	connectParametersToDestination();
 }
 
 void Route::addPoint(Point &values)
@@ -90,7 +91,7 @@ void Route::submitJob(int idx, bool show, bool forces)
 	for (BondCalculator *calc : _calculators)
 	{
 		Job job{};
-		int dims = _calc2Dims[calc];
+		int dims = _calc2Destination[calc].size();
 		job.custom.allocate_vectors(1, dims, _num);
 		job.fraction = idx / (float)(pointCount() - 1);
 
@@ -98,6 +99,8 @@ void Route::submitJob(int idx, bool show, bool forces)
 		{
 			float value = 0;
 			int calc_idx = _calc2Destination[calc][i];
+			
+			if (calc_idx < 0) continue;
 			if (_points.size() > idx && _points[idx].size() > calc_idx)
 			{
 				value = _points[idx][calc_idx];
@@ -193,7 +196,7 @@ void Route::customModifications(BondCalculator *calc, bool has_mol)
 
 	calc->setPipelineType(_pType);
 	FFProperties props;
-	props.group = _molecule->currentAtoms();
+	props.group = _instance->currentAtoms();
 	props.t = FFProperties::VdWContacts;
 	calc->setForceFieldProperties(props);
 	calc->setSampler(nullptr);
@@ -201,9 +204,7 @@ void Route::customModifications(BondCalculator *calc, bool has_mol)
 
 const Grapher &Route::grapher() const
 {
-	const BondSequence *seq = _calculators[_grapherIdx]->sequence();
-	const Grapher &g = seq->grapher();
-
+	const Grapher &g = _calculators[_grapherIdx]->grapher();
 	return g;
 }
 
@@ -224,7 +225,7 @@ AtomGraph *Route::grapherForTorsionIndex(int idx)
 	AtomGraph *ag = nullptr;
 	do
 	{
-		ag = grapher().graph(torsion(idx));
+		ag = grapher().graph(parameter(idx));
 	}
 	while (!ag && incrementGrapher());
 
@@ -276,7 +277,6 @@ void Route::clearWayPointFlips()
 void Route::populateWaypoints()
 {
 	clearWayPointFlips();
-	_mask = std::vector<bool>(destinationSize(), true);
 	
 	for (size_t i = 0; i < destinationSize(); i++)
 	{
@@ -301,14 +301,87 @@ void Route::populateWaypoints()
 
 }
 
+void Route::reportFound()
+{
+	for (size_t i = 0; i < _missing.size(); i++)
+	{
+		std::cout << "Missing torsion " << _missing[i]->desc() << " for "
+		<< "residue " << _missing[i]->residueId().str() << std::endl;
+	}
+
+}
+
+void Route::getParametersFromBasis()
+{
+	_parameters.clear();
+	_missing.clear();
+	_destination.clear();
+
+	const std::vector<ResidueTorsion> &list = _cluster->dataGroup()->headers();
+	std::vector<bool> found(list.size(), false);
+
+	for (BondCalculator *calc : _calculators)
+	{
+		TorsionBasis *basis = calc->torsionBasis();
+		
+		for (size_t i = 0; i < basis->parameterCount(); i++)
+		{
+			Parameter *p = basis->parameter(i);
+			int idx = _instance->indexForParameterFromList(p, list);
+			float v = 0;
+			
+			if (idx < 0)
+			{
+				_missing.push_back(p);
+			}
+			else
+			{
+				v = _rawDest[idx];
+			}
+			
+			const ResidueTorsion &rt = list[idx];
+
+			addParameter(rt, p);
+			_destination.push_back(v);
+		}
+	}
+}
+
+void Route::connectParametersToDestination()
+{
+	_calc2Destination.clear();
+
+	for (BondCalculator *calc : _calculators)
+	{
+		TorsionBasis *basis = calc->torsionBasis();
+
+		for (size_t i = 0; i < basis->parameterCount(); i++)
+		{
+			Parameter *p = basis->parameter(i);
+			
+			int chosen = -1;
+			for (int j = 0; j < _parameters.size(); j++)
+			{
+				if (_parameters[j].param == p)
+				{
+					chosen = j;
+					break;
+				}
+			}
+			
+			_calc2Destination[calc].push_back(chosen);
+		}
+		
+		for (size_t i = 0; i < _calc2Destination[calc].size(); i++)
+		{
+			std::cout << _calc2Destination[calc][i] << " ";
+		}
+		std::cout << std::endl;
+	}
+}
+
 void Route::prepareDestination()
 {
-	if (_rawDest.size() == 0 && _destination.size() > 0)
-	{
-		recalculateDestination();
-		return;
-	}
-	
 	if (_cluster == nullptr)
 	{
 		return;
@@ -319,50 +392,18 @@ void Route::prepareDestination()
 		throw std::runtime_error("Raw destination not set, trying to prepare"\
 		                         "destination");
 	}
-
-	const std::vector<ResidueTorsion> &list = _cluster->dataGroup()->headers();
-	std::vector<bool> found(list.size(), false);
-
-	_torsions.clear();
-	_destination.clear();
-
-	int count = 0;
-	for (BondCalculator *calc : _calculators)
-	{
-		TorsionBasis *basis = calc->sequence()->torsionBasis();
-		int calc_count = 0;
-		
-		for (size_t i = 0; i < basis->torsionCount(); i++)
-		{
-			BondTorsion *t = basis->torsion(i);
-			float v = _molecule->valueForTorsionFromList(t, list, _rawDest, found);
-			if (v != v)
-			{
-				v = 0;
-			}
-
-			addTorsion(t);
-			_destination.push_back(v);
-			
-			/* each calculator will only be sensitive to a subset of our
-			 * destination, so we need to keep records */
-			_calc2Destination[calc].push_back(count);
-			count++;
-			calc_count++;
-		}
-		
-		std::cout << "Torsion angle count for calculator: " << calc_count << std::endl;
-		_calc2Dims[calc] = calc_count;
-	}
 	
+	getParametersFromBasis();
+	connectParametersToDestination();
+	reportFound();
 	populateWaypoints();
 }
 
 int Route::indexOfTorsion(BondTorsion *t)
 {
-	for (size_t i = 0; i < torsionCount(); i++)
+	for (size_t i = 0; i < parameterCount(); i++)
 	{
-		if (torsion(i) == t)
+		if (parameter(i) == t)
 		{
 			return i;
 		}
@@ -425,7 +466,7 @@ void Route::printWayPoints()
 	std::cout << "Waypoints:" << std::endl;
 	for (size_t i = 0; i < wayPointCount(); i++)
 	{
-		std::cout << torsion(i)->desc() << " ";
+		std::cout << parameter(i)->desc() << " ";
 		std::cout << " flip: " << (flip(i) ? "yes" : "no") << "; ";
 		for (size_t j = 0; j < wayPointCount(); j++)
 		{
@@ -443,36 +484,6 @@ void Route::setDestination(Point &d)
 	_destination = d;
 }
 
-void Route::recalculateDestination()
-{
-	int count = 0;
-	_torsions.clear();
-
-	for (BondCalculator *calc : _calculators)
-	{
-		TorsionBasis *basis = calc->sequence()->torsionBasis();
-		int calc_count = 0;
-		
-		for (size_t i = 0; i < basis->torsionCount(); i++)
-		{
-			BondTorsion *t = basis->torsion(i);
-			addTorsion(t);
-			
-			/* each calculator will only be sensitive to a subset of our
-			 * destination, so we need to keep records */
-			_calc2Destination[calc].push_back(count);
-			count++;
-			calc_count++;
-		}
-		
-		std::cout << "Calc count: " << calc_count << std::endl;
-		_calc2Dims[calc] = calc_count;
-	}
-	
-	std::cout << "Torsion count: " << torsionCount() << std::endl;
-	std::cout << "Recalculated count: " << count << std::endl;
-}
-
 float Route::getTorsionAngle(int i)
 {
 	if (!flip(i))
@@ -488,4 +499,15 @@ float Route::getTorsionAngle(int i)
 	{
 		return destination(i) + 360;
 	}
+}
+
+std::vector<ResidueTorsion> Route::residueTorsions() const
+{
+	std::vector<ResidueTorsion> rts;
+	for (size_t i = 0; i < parameterCount(); i++)
+	{
+		rts.push_back(residueTorsion(i));
+	}
+
+	return rts;
 }

@@ -22,9 +22,18 @@
 class HasBondSequenceCustomisation
 {
 public:
+	/** resulting atom distribution should be superimposed on the
+	 * initial atom positions from the PDB */
 	void setSuperpose(bool superpose)
 	{
 		_superpose = superpose;
+	}
+	
+	/** grapher should follow the main chain and avoid exploring 
+	 * 	branches like disulphides */
+	void setInSequence(bool sequence)
+	{
+		_inSequence = sequence;
 	}
 
 	void setTotalSamples(int total)
@@ -58,20 +67,36 @@ public:
 		_threads = threads;
 	}
 	
+	void setMaximumLoopCount(size_t loops)
+	{
+		_loopCount = loops;
+	}
+	
+	void setMaximumJointCount(int max)
+	{
+		_jointLimit = max;
+	}
+	
 	void transferProperties(HasBondSequenceCustomisation *other)
 	{
 		other->_ignoreHydrogens = _ignoreHydrogens;
-		other->_superpose = _superpose;
 		other->_skipSections = _skipSections;
 		other->_totalSamples = _totalSamples;
+		other->_inSequence = _inSequence;
 		other->_maxThreads = _maxThreads;
+		other->_jointLimit = _jointLimit;
+		other->_superpose = _superpose;
+		other->_loopCount = _loopCount;
 		other->_threads = _threads;
 		other->_mode = _mode;
 	}
 protected:
 	bool _ignoreHydrogens = false;
 	bool _skipSections = false;
+	bool _inSequence = false;
 	bool _superpose = true;
+	size_t _loopCount = 1;
+	int _jointLimit = -1;
 
 	size_t _totalSamples = 0;
 	size_t _maxThreads = 0;

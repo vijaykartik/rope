@@ -19,18 +19,20 @@
 #ifndef __vagabond__PositionRefinery__
 #define __vagabond__PositionRefinery__
 
-#include "SimplexEngine.h"
 #include "TorsionBasis.h"
 #include "AnchorExtension.h"
+#include "Engine.h"
 #include <iostream>
 #include <queue>
+#include <atomic>
 #include <set>
 #include <climits>
 
 class AtomGroup;
+class Parameter;
 class BondCalculator;
 
-class PositionRefinery : public SimplexEngine
+class PositionRefinery : public RunsEngine
 {
 public:
 	PositionRefinery(AtomGroup *group = nullptr);
@@ -42,6 +44,11 @@ public:
 	}
 
 	void refine();
+	
+	void setThorough(bool th)
+	{
+		_thorough = th;
+	}
 	virtual void finish();
 	
 	static void backgroundRefine(PositionRefinery *ref);
@@ -50,40 +57,75 @@ public:
 	{
 		return _ncalls;
 	}
+	
+	bool isDone()
+	{
+		return _done;
+	}
 protected:
-	virtual int sendJob(const SPoint &trial, bool force_update = false);
-	virtual int awaitResult(double *eval);
+	virtual size_t parameterCount();
+	virtual int sendJob(const std::vector<float> &all);
+	virtual float getResult(int *job_id);
 private:
+	void fullSizeVector(const std::vector<float> &all,
+	                    float *dest);
 	void refine(AtomGroup *group);
+	void refineThroughEach(AtomGroup *subset);
+	void grabNewAnchor(AtomGroup *subset);
+
+	void wiggleBond(const Parameter *t);
+
+	void setupCalculator(AtomGroup *group, bool loopy, int jointLimit = -1);
 	bool refineBetween(int start, int end, int side_max = INT_MAX);
 	double fullResidual();
-	SPoint expandPoint(const SPoint &p);
+	std::vector<float> expandPoint(const std::vector<float> &p);
 	void calculateActiveTorsions();
 	void fullRefinement(AtomGroup *group);
 	void stepwiseRefinement(AtomGroup *group);
-	void stepRefine(AtomGroup *group);
 	bool *generateAbsorptionMask(std::set<Atom *> done);
-	void measureAtoms(std::set<Atom *> done);
+
+	void addActiveIndices(std::set<Parameter *> &params);
+	void clearActiveIndices();
+	void setMaskFromIndices();
+	void updateAllTorsions(AtomGroup *subset);
 
 	AtomGroup *_group = nullptr;
 	BondCalculator *_calculator = nullptr;
 
-	std::queue<Atom *> _atomQueue;
-	std::map<Atom *, AnchorExtension> _atom2Ext;
-
-	std::vector<float> _steps;
-	float _step = 1;
+	float _step = 0.2;
 	int _ncalls = 0;
 	int _nBonds = 0;
 
 	int _nActive = 0;
 	int _start = 0;
 	int _end = 0;
+	size_t _progs = 0;
 	
 	int _depthRange = 5;
+	bool _thorough = false;
+	bool _reverse = false;
+	bool _finish = false;
+	std::atomic<bool> _done{false};
 	
 	TorsionBasis::Type _type = TorsionBasis::TypeSimple;
+	Engine *_engine = nullptr;
 	
+	enum RefinementStage
+	{
+		None,
+		Positions,
+		Loopy,
+		CarefulLoopy,
+	};
+
+	void reallocateEngine(RefinementStage stage);
+	void loopyRefinement(AtomGroup *group, RefinementStage stage);
+	void wiggleBonds(RefinementStage stage);
+	RefinementStage _stage = None;
+	int _count = 0;
+	
+	std::set<int> _activeIndices;
+	std::set<Parameter *> _parameters;
 	std::vector<bool> _mask;
 };
 

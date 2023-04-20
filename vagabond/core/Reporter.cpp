@@ -41,17 +41,21 @@ void Reporter::report()
     for (int i = 0; i < entity_manager->objectCount(); i++)
     {
         Entity &entity = entity_manager->object(i);
-        Sequence *sequence = entity.sequence();
         std::cout << "Entity " << i << ": " << entity.name() << std::endl;
-        std::cout << "    No. of residues: " << sequence->str().length() << std::endl;
-        std::cout << "    Sequence: " << sequence->str() << std::endl;
+
+		if (entity.hasSequence())
+		{
+			Sequence *sequence = entity.sequence();
+			std::cout << "    No. of residues: " << sequence->str().length() << std::endl;
+			std::cout << "    Sequence: " << sequence->str() << std::endl;
+		}
         std::cout << "    No. of models: " << entity.modelCount() << std::endl;
         std::cout << "    Models: [index, name, no. of molecules]" << std::endl;
         for (int m = 0; m < entity.modelCount(); m++)
         {
             Model *model = entity.models()[m];
             std::cout << "        Model " << m << ": " << model->name() << " (";
-            std::cout << model->moleculesForEntity(&entity).size() << ")" << std::endl;
+            std::cout << model->instanceCountForEntity(entity.name()) << ")" << std::endl;
         }
         std::cout << std::endl;
     }
@@ -70,9 +74,9 @@ void Reporter::report()
         {
             Entity &entity = entity_manager->object(e);
             std::cout << "    Entity " << e << " (" << entity.name() <<  "): ";
-            std::set<Molecule *> molecules = model.moleculesForEntity(&entity);
+            std::set<Polymer *> polymers = model.polymersForEntity(&entity);
             int index = 0;
-            for (Molecule* m: molecules)
+            for (Polymer *m : polymers)
             {
                 if (index == 0)
                 {

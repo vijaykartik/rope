@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <map>
+#include <cstddef>
 #include <cfloat>
 
 class RunsEngine
@@ -28,15 +29,82 @@ class RunsEngine
 public:
 	virtual ~RunsEngine() {};
 	virtual size_t parameterCount() = 0;
-	virtual int sendJob(std::vector<float> &all) = 0;
-	virtual float getResult(int *job_id) = 0;
+	virtual int sendJob(const std::vector<float> &all) = 0;
+
+	virtual float getResult(int *job_id)
+	{
+		if (_scores.size() == 0)
+		{
+			*job_id = -1;
+			return 0;
+		}
+
+		*job_id = _scores.begin()->first;
+		float result = _scores.begin()->second;
+		_scores.erase(_scores.begin());
+
+		return result;
+	}
+
+	void resetTickets()
+	{
+		_ticket = 0;
+		_scores.clear();
+	}
+protected:
+	int getNextTicket()
+	{
+		return ++_ticket;
+	}
+	
+	const int &getLastTicket() const
+	{
+		return _ticket;
+	}
+	
+	
+	void setScoreForTicket(int ticket, double score)
+	{
+		_scores[ticket] = score;
+	}
+private:
+	int _ticket = 0;
+	std::map<int, double> _scores;
 };
 
 class Engine
 {
 public:
 	Engine(RunsEngine *ref);
+	virtual ~Engine() {};
+	
+	virtual void start();
+	virtual void run() = 0;
+	
+	void setStepSize(float size)
+	{
+		_step = size;
+	}
 
+	float bestScore()
+	{
+		return _bestScore;
+	}
+	
+	const bool &improved() const
+	{
+		return _improved;
+	}
+	
+	const std::vector<float> &bestResult() const
+	{
+		return _bestResult;
+	}
+	
+	void setMaxRuns(int maxRuns)
+	{
+		_maxRuns = maxRuns;
+	}
 private:
 	struct TicketScore
 	{
@@ -45,11 +113,16 @@ private:
 		bool received = false;
 	};
 protected:
-	void sendJob(std::vector<float> &all);
+	int sendJob(const std::vector<float> &all);
+	std::vector<float> findBestResult(float *score);
 	
 	void getResults();
 	
-	std::vector<float> findBestResult(float *score);
+	const std::vector<float> &current() const
+	{
+		return _current;
+	}
+	
 	void currentScore();
 	
 	void clearResults()
@@ -57,19 +130,9 @@ protected:
 		_scores.clear();
 	}
 	
-	float bestScore()
-	{
-		return _best;
-	}
-	
-	void setCurrent(std::vector<float> &chosen)
+	void setCurrent(const std::vector<float> &chosen)
 	{
 		_current = chosen;
-	}
-	
-	const std::vector<float> &current() const
-	{
-		return _current;
 	}
 	
 	std::vector<float> difference_from(std::vector<float> &other);
@@ -80,13 +143,20 @@ protected:
 	{
 		return _n;
 	}
+
+	bool _improved = false;
+	float _step = 1.0;
+	int _maxRuns = 500;
+	std::map<int, TicketScore> _scores;
 private:
 	RunsEngine *_ref = nullptr;
 
-	std::map<int, TicketScore> _scores;
-	std::vector<float> _current;
-	float _best = FLT_MAX;
+	std::vector<float> _current, _bestResult;
 	int _n = 0;
+	float _bestScore = FLT_MAX;
+	float _startScore = FLT_MAX;
+	float _currentScore = FLT_MAX;
+	float _endScore = FLT_MAX;
 };
 
 #endif

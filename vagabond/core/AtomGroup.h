@@ -28,7 +28,7 @@
 typedef Atom *AtomPtr;
 typedef std::vector<AtomPtr> AtomVector;
 
-class SimplexEngine;
+class PositionRefinery;
 class Mechanics;
 class Sequence;
 class File;
@@ -58,6 +58,7 @@ public:
 	void addTransformedAnchor(Atom *a, glm::mat4x4 transform);
 	void remove(AtomGroup *g);
 	
+	void writeToFile(std::string name);
 	
 	const AtomVector &atomVector() const
 	{
@@ -99,9 +100,25 @@ public:
 	size_t possibleAnchorCount();
 	Atom *possibleAnchor(int i);
 	
-	Atom *chosenAnchor();
+	Atom *chosenAnchor(bool min = true);
+	Atom *sequenceAnchor()
+	{
+		Atom *atom = chosenAnchor(true);
+		_chosenAnchor = nullptr;
+		return atom;
+	}
+	
+	void clearChosenAnchor()
+	{
+		_chosenAnchor = nullptr;
+	}
+	
+	void setChosenAnchor(Atom *a)
+	{
+		_chosenAnchor = a;
+	}
 
-	std::vector<AtomGroup *> &connectedGroups();
+	std::vector<AtomGroup *> &connectedGroups(bool forSequence = false);
 	
 	AtomGroup *connectedGroupToAnchor(Atom *anchor)
 	{
@@ -119,8 +136,8 @@ public:
 	
 	void finishedRefining();
 
-	void alignAnchor();
-	void refinePositions(bool sameThread = false);
+//	void alignAnchor();
+	void refinePositions(bool sameThread = false, bool thorough = false);
 	void organiseSamples(int n);
 	
 	void getLimitingResidues(int *min, int *max);
@@ -130,6 +147,8 @@ public:
 	 * AtomGroups of multiple connected molecules.
 	 * @return sequence object */
 	Sequence *sequence();
+
+	AtomGroup extractFragment(Sequence seq);
 	
 	float rmsd() const;
 	
@@ -173,7 +192,7 @@ private:
 	std::map<std::string, Atom *> _desc2Atom;
 
 	std::thread *_refine = nullptr;
-	SimplexEngine *_engine = nullptr;
+	PositionRefinery *_refinery = nullptr;
 	std::thread *_mechThread = nullptr;
 	Mechanics *_mech = nullptr;
 	ForceField *_forceField = nullptr;
@@ -181,6 +200,7 @@ private:
 	
 	double _lastResidual = FLT_MAX;
 	std::vector<AtomGroup *> _connectedGroups;
+	bool _forSequence = false;
 	
 	std::map<Atom *, AtomGroup *> _anchor2Group;
 	

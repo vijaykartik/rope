@@ -21,7 +21,7 @@
 
 #include <iostream>
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 class Value
@@ -90,6 +90,12 @@ public:
 	void housekeeping()
 	{
 		setText(_text);
+	}
+	
+	friend std::ostream &operator<<(std::ostream& stream, const Value& v)
+	{
+		stream << v.text();
+		return stream;
 	}
 
 	friend void to_json(json &j, const Value &value);

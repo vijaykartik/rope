@@ -62,7 +62,17 @@ ConfSpaceView::~ConfSpaceView()
 
 void ConfSpaceView::askToFoldIn(int extra)
 {
-	std::string str = "Found " + i_to_str(extra) + " unrefined molecules.\n";
+	size_t prolines = _entity->unrefinedProlineCount();
+
+	std::string str = "Found " + i_to_str(extra) + " unrefined molecules";
+	if (prolines == 0)
+	{
+		str += ".\n";
+	}
+	else
+	{
+		str += "\nincluding " + std::to_string(prolines) + " with naughty prolines.\n";
+	}
 	str += "Refine torsion angles to atom positions\nnow?";
 	AskYesNo *askyn = new AskYesNo(this, str, "fold_in", this);
 	setModal(askyn);
@@ -73,7 +83,7 @@ void ConfSpaceView::setup()
 	setMakesSelections();
 	IndexResponseView::setup();
 
-	size_t extra = _entity->checkForUnrefinedMolecules();
+	size_t extra = _entity->unrefinedInstanceCount();
 
 	if (extra > 0)
 	{
@@ -322,6 +332,8 @@ void ConfSpaceView::buttonPressed(std::string tag, Button *button)
 	{
 		removeObject(_origin);
 		delete _origin; _origin = nullptr;
+		removeObject(_axes);
+		delete _axes; _axes = nullptr;
 	}
 	if (tag == "choose_reorient_molecule")
 	{
@@ -360,6 +372,13 @@ void ConfSpaceView::buttonPressed(std::string tag, Button *button)
 		mdg->setSeparateAverage(members);
 		_view->cluster()->cluster();
 		refresh();
+	}
+
+	if (tag == "match_colour")
+	{
+		std::cout << _axes << " " << _colourRule << std::endl;
+		std::string key = _colourRule->header();
+		_axes->backgroundPrioritise(key);
 	}
 
 	if (tag == "align_axes")
@@ -416,13 +435,13 @@ void ConfSpaceView::buttonPressed(std::string tag, Button *button)
 	
 	if (tag == "path_from")
 	{
-		Molecule *m = static_cast<Molecule	*>(button->returnObject());
+		Polymer *m = static_cast<Polymer	*>(button->returnObject());
 		_from = m;
 	}
 	
 	if (tag == "view_model")
 	{
-		Molecule *m = static_cast<Molecule	*>(button->returnObject());
+		Polymer *m = static_cast<Polymer	*>(button->returnObject());
 		
 		if (m)
 		{
@@ -434,7 +453,7 @@ void ConfSpaceView::buttonPressed(std::string tag, Button *button)
 	
 	if (tag == "refinement_setup")
 	{
-		Molecule *m = static_cast<Molecule	*>(button->returnObject());
+		Polymer *m = static_cast<Polymer	*>(button->returnObject());
 		createReference(m);
 		SetupRefinement *sr = new SetupRefinement(this, *(m->model()));
 		sr->setAxes(_axes);
@@ -443,7 +462,7 @@ void ConfSpaceView::buttonPressed(std::string tag, Button *button)
 	
 	if (tag == "set_as_reference")
 	{
-		Molecule *m = static_cast<Molecule	*>(button->returnObject());
+		Polymer *m = static_cast<Polymer	*>(button->returnObject());
 		createReference(m);
 	}
 	
@@ -571,16 +590,18 @@ void ConfSpaceView::prepareModelMenu(HasMetadata *hm)
 {
 	Menu *m = new Menu(this);
 	m->setReturnObject(hm);
-	m->addOption("view model", "view_model");
+	m->addOption("view details", "view_model");
 	m->addOption("set as reference", "set_as_reference");
+#ifdef VERSION_REFINEMENT
 	m->addOption("refinement setup", "refinement_setup");
+#endif
 	double x = _lastX / (double)_w; double y = _lastY / (double)_h;
 	m->setup(x, y);
 
 	setModal(m);
 }
 
-void ConfSpaceView::createReference(Molecule *m)
+void ConfSpaceView::createReference(Polymer *m)
 {
 	if (_type != ConfTorsions)
 	{
@@ -611,7 +632,7 @@ void ConfSpaceView::createReference(Molecule *m)
 }
 
 
-void ConfSpaceView::reorientToMolecule(Molecule *mol)
+void ConfSpaceView::reorientToPolymer(Polymer *pol)
 {
 	if (_axes == nullptr)
 	{
@@ -621,7 +642,7 @@ void ConfSpaceView::reorientToMolecule(Molecule *mol)
 	setInformation("");
 	_status = Nothing;
 	
-	_axes->reorient(-1, mol);
+	_axes->reorient(-1, pol);
 }
 
 void ConfSpaceView::prepareEmptySpaceMenu()
@@ -632,7 +653,8 @@ void ConfSpaceView::prepareEmptySpaceMenu()
 	{
 		m->addOption("show origin", "show_origin");
 	}
-	else
+	
+	if (_origin != nullptr || _axes != nullptr)
 	{
 		m->addOption("hide origin", "hide_origin");
 	}

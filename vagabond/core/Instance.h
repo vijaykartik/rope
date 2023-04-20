@@ -22,16 +22,28 @@
 /** \class Instance group of atoms corresponding to a concrete/observed
  *  molecule from a structure */
 
+#include "ResidueId.h"
+#include "RopeTypes.h"
+#include "HasMetadata.h"
+#include "MetadataGroup.h"
 #include <vagabond/utils/glm_json.h>
+#include <vagabond/c4x/Angular.h>
+#include <vagabond/c4x/Posular.h>
 using nlohmann::json;
 
+class ResidueTorsion;
+class AtomContent;
+class Parameter;
 class Interface;
 class AtomGroup;
-class Molecule;
+class Polymer;
+class Residue;
+class Entity;
+class Ligand;
 class Model;
 class Atom;
 
-class Instance
+class Instance : public HasMetadata 
 {
 public:
 	Instance();
@@ -44,10 +56,19 @@ public:
 		_model = model;
 	}
 	
+	virtual bool hasSequence() const = 0;
+	
 	const std::string &model_id() const
 	{
 		return _model_id;
 	}
+
+	virtual bool displayable() const
+	{
+		return true;
+	}
+	
+	void housekeeping();
 	
 	virtual const std::string id() const { return ""; }
 	
@@ -59,33 +80,134 @@ public:
 
 	void addToInterface(Instance *other, Interface *face, 
 	                    double max, bool derived);
-	virtual Atom *equivalentForAtom(Model *other, std::string desc)
+
+	Atom *equivalentForAtom(Instance *other, Atom *atom);
+	virtual Atom *equivalentForAtom(Polymer *other, Atom *atom)
+	{
+		return nullptr;
+	}
+
+	virtual Atom *equivalentForAtom(Ligand *other, Atom *atom)
 	{
 		return nullptr;
 	}
 	
-	virtual std::map<Atom *, Atom *> mapAtoms(Molecule *other)
+	void superposeOn(Instance *other);
+	
+	const Residue *localResidueForResidueTorsion(const ResidueTorsion &rt);
+	virtual Residue *const equivalentMaster(const ResidueId &local)
+	{ return nullptr; }
+	virtual Residue *const equivalentLocal(Residue *const master) const
+	{ return nullptr; }
+	virtual Residue *const equivalentLocal(const ResidueId &m_id) const
+	{ return nullptr; }
+	virtual Residue *localForLocalId(const ResidueId &l_id)
+	{ return nullptr; }
+
+	int indexForParameterFromList(Parameter *param,
+	                              const std::vector<ResidueTorsion> &list);
+
+	float valueForTorsionFromList(Parameter *bt,
+	                              const std::vector<ResidueTorsion> &list,
+	                              const std::vector<Angular> &values,
+	                              std::vector<bool> &found);
+
+	virtual const Metadata::KeyValues metadata() const;
+	void updateRmsdMetadata();
+	
+	virtual std::map<Atom *, Atom *> mapAtoms(Polymer *other)
 	{
 		return std::map<Atom *, Atom *>();
 	}
+
+	Atom *atomByIdName(const ResidueId &id, std::string name, 
+	                   std::string chain = "");
 	
 	void load();
 	virtual AtomGroup *currentAtoms();
+	void wipeAtoms();
 	void unload();
+
+	Entity *entity();
 	
-	friend void to_json(json &j, const Molecule &value);
-	friend void from_json(const json &j, Molecule &value);
-protected:
+	void setEntity(Entity *entity)
+	{
+		_entity = entity;
+	}
+	
+	const std::string &entity_id() const
+	{
+		return _entity_id;
+	}
+
+	virtual bool isProlined() const
+	{
+		return true;
+	}
+	
+	const bool &isRefined() const
+	{
+		return _refined;
+	}
+
+	void insertTransforms(AtomContent *atoms);
+	void extractTransformedAnchors(AtomContent *atoms);
+	
+	virtual const size_t completenessScore() const
+	{
+		return 0;
+	}
+
+	virtual void insertTorsionAngles(AtomContent *atoms) {};
+	virtual void extractTorsionAngles(AtomContent *atoms, 
+	                                  bool tmp_dest = false) {}
+	
+	friend void to_json(json &j, const Polymer &value);
+	friend void from_json(const json &j, Polymer &value);
+
 	virtual bool atomBelongsToInstance(Atom *a) = 0;
+	virtual MetadataGroup::Array grabTorsions(rope::TorsionType type)
+	{
+		return MetadataGroup::Array();
+	}
+
+	bool hasAtomPositionList(Instance *reference)
+	{
+		return (_inst2Pos.count(reference) > 0);
+	}
+
+	virtual std::vector<Posular> atomPositionList(Instance *reference,
+	                                              const std::vector<Atom3DPosition>
+	                                              &headers,
+	                                              std::map<ResidueId, int> 
+	                                              &resIdxs)
+	{
+		return std::vector<Posular>();
+	};
+
+	void addTorsionsToGroup(MetadataGroup &group, rope::TorsionType type);
+protected:
 
 	std::string _model_id;
+	std::string _entity_id;
+
 	Model *_model = nullptr;
+	Entity *_entity = nullptr;
 
 	AtomGroup *_currentAtoms = nullptr;
 	AtomGroup *_motherAtoms = nullptr;
 	
+	void setRefined(bool r)
+	{
+		_refined = r;
+	}
+
+	std::map<Instance *, std::vector<Posular> > _inst2Pos;
 private:
 	void setAtomGroupSubset();
+
+	bool _refined = false;
+	std::map<std::string, glm::mat4x4> _transforms;
 };
 
 #endif

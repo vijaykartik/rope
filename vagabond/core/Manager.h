@@ -31,7 +31,7 @@ public:
 	Manager() {};
 	virtual ~Manager() {};
 
-	size_t objectCount()
+	size_t objectCount() const
 	{
 		return _objects.size();
 	}

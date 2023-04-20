@@ -30,50 +30,55 @@
 #include "VisualPreferences.h"
 #include "AtomRecall.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
-class Molecule;
+class Polymer;
 
-class Entity : public Substance, public HasResponder<Responder<Entity>>
+class Entity : public HasResponder<Responder<Entity>>
 {
 public:
 	Entity();
 	
-	Sequence *sequence()
+	virtual bool hasSequence() { return false; }
+
+	virtual Sequence *sequence()
 	{
-		return &_sequence;
+		return nullptr;
 	}
 	
-	void setSequence(Sequence *seq)
+	void setName(std::string name)
 	{
-		_sequence = *seq;
+		_name = name;
+	}
+
+	const std::string &name() const
+	{
+		return _name;
 	}
 	
 	void checkModel(Model &m);
-
 	std::set<Model *> unrefinedModels();
-	size_t checkForUnrefinedMolecules();
-	void throwOutMolecule(Molecule *mol);
+
+	size_t unrefinedInstanceCount();
+	size_t unrefinedProlineCount();
 	void throwOutModel(Model *mol);
+
+	virtual void throwOutInstance(Polymer *mol) {};
+	virtual void throwOutInstance(Ligand *mol) {};
+	virtual void appendIfMissing(Instance *mol) {};
 	
 	MetadataGroup makeTorsionDataGroup();
 	PositionalGroup makePositionalDataGroup();
-	Molecule *chooseRepresentativeMolecule();
+	Instance *chooseRepresentativeInstance();
+	
+	virtual const std::vector<Instance *> instances() const = 0;
 
-	const size_t moleculeCount() const
-	{
-		return _molecules.size();
-	}
+	virtual const size_t instanceCount() const = 0;
 
 	const size_t modelCount() const
 	{
 		return _models.size();
-	}
-	
-	const std::vector<Molecule *> &molecules() const
-	{
-		return _molecules;
 	}
 	
 	const std::vector<Model *> &models() const
@@ -81,10 +86,17 @@ public:
 		return _models;
 	}
 	
-	void housekeeping();
+	virtual void housekeeping();
 	
-	Metadata *distanceBetweenAtoms(AtomRecall a, AtomRecall b);
-	Metadata *angleBetweenAtoms(AtomRecall a, AtomRecall b, AtomRecall c);
+	virtual Metadata *distanceBetweenAtoms(AtomRecall a, AtomRecall b)
+	{
+		return nullptr;
+	}
+
+	virtual Metadata *angleBetweenAtoms(AtomRecall a, AtomRecall b, AtomRecall c)
+	{
+		return nullptr;
+	}
 
 	std::map<std::string, int> allMetadataHeaders();
 	
@@ -100,46 +112,19 @@ public:
 		_actuallyRefine = refine;
 	}
 
-	friend void to_json(json &j, const Entity &value);
-	friend void from_json(const json &j, Entity &value);
-private:
+	friend void to_json(json &j, const PolymerEntity &value);
+	friend void from_json(const json &j, PolymerEntity &value);
+protected:
+	virtual MetadataGroup prepareTorsionGroup() { return MetadataGroup(0); }
+	virtual PositionalGroup preparePositionGroup() { return PositionalGroup(0); }
 
-	Sequence _sequence;
 	VisualPreferences _visPrefs;
 	
-	Model *_currentModel = nullptr;
-
-	void appendMolecule(Model &m);
-	
 	bool _actuallyRefine = true;
+	std::string _name;
 	
 	std::set<Model *> _refineSet;
 	std::vector<Model *> _models;
-	std::vector<Molecule *> _molecules;
 };
-
-inline void to_json(json &j, const Entity &value)
-{
-	j["name"] = value._name;
-	j["sequence"] = value._sequence;
-	j["visuals"] = value._visPrefs;
-}
-
-inline void from_json(const json &j, Entity &value)
-{
-	value._name = j.at("name");
-	value._sequence = j.at("sequence");
-
-	try
-	{
-		value._visPrefs = j.at("visuals");
-	}
-	catch (...)
-	{
-		
-	}
-	
-	value.clickTicker();
-}
 
 #endif

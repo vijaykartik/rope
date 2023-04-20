@@ -22,13 +22,16 @@
 #include <vector>
 #include <map>
 #include "Bondstraint.h"
+#include "ResidueId.h"
 
 class BondLength;
+class Parameter;
 class BondAngle;
 class BondTorsion;
 class Chirality;
 class Atom;
 class AtomGroup;
+class HyperValue;
 
 class HasBondstraints
 {
@@ -40,10 +43,30 @@ public:
 	void addBondstraint(BondAngle *straint);
 	void addBondstraint(BondTorsion *straint);
 	void addBondstraint(Chirality *straint);
+	void addBondstraint(HyperValue *straint);
+	void addBondstraintsFrom(HasBondstraints *other);
+	
+	void setGrabsBondstraints(bool grab)
+	{
+		_grabby = true;
+	}
 	
 	size_t bondstraintCount()
 	{
 		return _bondstraints.size();
+	}
+
+	/** @returns number of bond lengths involved with given atom */
+	size_t hyperValueCount() const
+	{
+		return _hyperValues.size();
+	}
+	
+	/** @param i index
+	  * @returns specific bond length involving atom */
+	HyperValue *hyperValue(int i) const 
+	{
+		return _hyperValues[i];
 	}
 
 	/** @returns number of bond lengths involved with given atom */
@@ -59,8 +82,11 @@ public:
 		return _bondLengths[i];
 	}
 	
+	HyperValue *findHyperValue(Atom *a);
 	BondLength *findBondLength(Atom *a, Atom *b);
-	BondTorsion *findBondTorsion(Atom *a, Atom *b, Atom *c, Atom *d);
+	BondTorsion *findBondTorsion(Atom *a, Atom *b, Atom *c, Atom *d) const;
+	BondTorsion *findBondTorsion(std::string desc);
+	Parameter *findParameter(std::string desc, const ResidueId &id);
 	Chirality *findChirality(Atom *cen, Atom *a, Atom *b, Atom *c);
 
 	/** @returns number of bond angles involved with given atom */
@@ -105,6 +131,19 @@ public:
 	BondAngle *terminalBondAngle(int i) const 
 	{
 		return _terminalBondAngles[i];
+	}
+
+	/** @returns number of parameters involved with given atom */
+	size_t parameterCount() const
+	{
+		return _parameters.size();
+	}
+	
+	/** @param i index
+	  * @returns specific bond torsions involving atom */
+	Parameter *parameter(int i) const 
+	{
+		return _parameters[i];
 	}
 
 	/** @returns number of bond torsions involved with given atom */
@@ -166,20 +205,31 @@ public:
 	{
 		_owns = owns;
 	}
+	
+	const bool &isGrabby() const
+	{
+		return _grabby;
+	}
 protected:
 	void deleteBondstraints();
 	bool hasBondLength(BondLength *straint);
 	bool hasBondAngle(BondAngle *angle);
 	bool hasTorsion(BondTorsion *torsion);
 	bool hasChirality(Chirality *chir);
+	bool hasHyperValue(HyperValue *hv);
 private:
 	bool _owns = false;
+	bool _grabby = false;
 
 	std::vector<Bondstraint *> _bondstraints;
 	std::vector<BondLength *> _bondLengths;
 	std::vector<BondAngle *> _bondAngles;
 	std::vector<BondAngle *> _centralBondAngles;
 	std::vector<BondAngle *> _terminalBondAngles;
+	std::vector<HyperValue *> _hyperValues;
+
+	std::vector<Parameter *> _parameters;
+	std::map<ResidueId, std::vector<Parameter *> > _residue2Parameters;
 
 	std::vector<BondTorsion *> _torsions;
 	std::vector<BondTorsion *> _terminalTorsions;
@@ -189,6 +239,7 @@ private:
 	std::map<Bondstraint::Key, Bondstraint *> _lengthMap;
 	std::map<Bondstraint::Key, Bondstraint *> _angleMap;
 	std::map<Bondstraint::Key, Bondstraint *> _chiralMap;
+	std::map<Bondstraint::Key, Bondstraint *> _hyperValueMap;
 
 	std::vector<Chirality *> _chirals;
 };

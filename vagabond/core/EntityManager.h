@@ -23,26 +23,24 @@
 #include <vector>
 #include <list>
 
-#include "Entity.h"
-#include "Responder.h"
-#include "Manager.h"
+#include "PolymerEntityManager.h"
+#include "LigandEntityManager.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
-class Molecule;
 class ModelManager;
+class PolymerEntity;
+class Model;
+class Entity;
 
-class EntityManager : 
-public Manager<Entity>, 
-public Responder<Entity>,
-public Progressor 
+class EntityManager 
 {
 public:
 	EntityManager();
 
-	virtual Entity *insertIfUnique(Entity &e);
-	virtual void update(const Entity &e);
+	Entity *insertIfUnique(PolymerEntity &e);
+	void update(const PolymerEntity &e);
 	
 	Entity *entity(std::string name)
 	{
@@ -53,36 +51,64 @@ public:
 		
 		return nullptr;
 	}
+	
+	std::vector<Entity *> entities();
+
+	
+	size_t objectCount();
+	Entity &object(int i);
 
 	void housekeeping();
-	virtual void respond();
+	void respond();
 	void checkModelsForReferences(ModelManager *manager);
 
-	void purgeMolecule(Molecule *mol);
+	void purgeInstance(Instance *inst);
 	void purgeEntity(Entity *ent);
 	void purgeModel(Model *mol);
-
-	virtual const std::string progressName() const
+	
+	PolymerEntityManager *forPolymers()
 	{
-		return "entities";
+		return &_peManager;
+	}
+	
+	void setPolymerEntityManager(const json &data)
+	{
+		_peManager = data;
 	}
 
 	friend void to_json(json &j, const EntityManager &value);
 	friend void from_json(const json &j, EntityManager &value);
 private:
 	std::map<std::string, Entity *> _name2Entity;
-
+	PolymerEntityManager _peManager;
+	LigandEntityManager _leManager;
 };
 
 inline void to_json(json &j, const EntityManager &value)
 {
-	j["entities"] = value._objects;
+	j["polymer_entity_manager"] = value._peManager;
+	
+	try
+	{
+		j["ligand_entity_manager"] = value._leManager;
+	}
+	catch (const json::exception &err)
+	{
+
+	}
 }
 
 inline void from_json(const json &j, EntityManager &value)
 {
-    std::list<Entity> entities = j.at("entities");
-    value._objects = entities;
+	value._peManager = j.at("polymer_entity_manager");
+	try
+	{
+		value._leManager = j.at("ligand_entity_manager");
+	}
+	catch (const json::exception &err)
+	{
+
+	}
 }
 
 #endif

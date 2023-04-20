@@ -16,6 +16,7 @@
 // 
 // Please email: vagabond @ hginn.co.uk for more details.
 
+#include "Environment.h"
 #include "Metadata.h"
 #include <sstream>
 
@@ -29,12 +30,16 @@ Metadata::~Metadata()
 
 }
 
-
-const Metadata::KeyValues *Metadata::valuesForMolecule(const std::string id)
+bool Metadata::isMaster()
 {
-	if (_mole2Data.count(id))
+	return (this == Environment::metadata());
+}
+
+const Metadata::KeyValues *Metadata::valuesForInstance(const std::string id)
+{
+	if (_inst2Data.count(id))
 	{
-		return _mole2Data.at(id);
+		return _inst2Data.at(id);
 	}
 
 	return nullptr;
@@ -82,6 +87,14 @@ void Metadata::purgeKey(std::string key)
 		}
 	}
 
+	for (auto it = _headers.begin(); it != _headers.end(); it++)
+	{
+		if (*it == key)
+		{
+			_headers.erase(it);
+			break;
+		}
+	}
 }
 
 bool Metadata::addToList(KeyValues &edit, std::string &key,
@@ -116,7 +129,7 @@ bool Metadata::addToList(KeyValues &edit, std::string &key,
 
 void Metadata::addKeyValues(const KeyValues &kv, const bool overwrite)
 {
-	std::string filename, model_id, molecule_id;
+	std::string filename, model_id, instance_id;
 	if (kv.count("filename"))
 	{
 		filename = kv.at("filename").text();
@@ -125,16 +138,20 @@ void Metadata::addKeyValues(const KeyValues &kv, const bool overwrite)
 	{
 		model_id = kv.at("model").text();
 	}
-	if (kv.count("molecule"))
+	if (kv.count("instance"))
 	{
-		molecule_id = kv.at("molecule").text();
+		instance_id = kv.at("instance").text();
+	}
+	if (kv.count("molecule")) // backwards compatibility
+	{
+		instance_id = kv.at("molecule").text();
 	}
 	
 	KeyValues edit = kv;
 
 	addToList(edit, filename, _file2Data, overwrite);
 	addToList(edit, model_id, _model2Data, overwrite);
-	addToList(edit, molecule_id, _mole2Data, overwrite);
+	addToList(edit, instance_id, _inst2Data, overwrite);
 	
 	KeyValues::const_iterator it;
 	
@@ -147,9 +164,9 @@ void Metadata::addKeyValues(const KeyValues &kv, const bool overwrite)
 	_data.push_back(edit);
 	_file2Data[filename] = &_data.back();
 	_model2Data[model_id] = &_data.back();
-	_mole2Data[molecule_id] = &_data.back();
+	_inst2Data[instance_id] = &_data.back();
 
-	_mol2Model[molecule_id] = model_id;
+	_inst2Model[instance_id] = model_id;
 }
 
 Metadata &Metadata::operator+=(const Metadata &other)
@@ -165,10 +182,19 @@ Metadata &Metadata::operator+=(const Metadata &other)
 void Metadata::extractData(std::ostringstream &csv, KeyValues &kv) const
 {
 	KeyValues *model_kv = nullptr;
+	std::string instance_id;
 	if (kv.count("molecule"))
 	{
-		std::string molecule_id = kv.at("molecule").text();
-		std::string model_id = _mol2Model.at(molecule_id);
+		instance_id = kv.at("molecule").text();
+	}
+	else if (kv.count("instance"))
+	{
+		instance_id = kv.at("instance").text();
+	}
+
+	if (instance_id.length())
+	{
+		std::string model_id = _inst2Model.at(instance_id);
 		if (_model2Data.count(model_id))
 		{
 			model_kv = _model2Data.at(model_id);
@@ -219,7 +245,7 @@ std::string Metadata::asCSV() const
 
 	std::map<std::string, KeyValues *>::const_iterator it;
 
-	for (it = _mole2Data.cbegin(); it != _mole2Data.cend(); it++)
+	for (it = _inst2Data.cbegin(); it != _inst2Data.cend(); it++)
 	{
 		extractData(csv, *it->second);
 	}
@@ -227,8 +253,8 @@ std::string Metadata::asCSV() const
 	return csv.str();
 }
 
-void Metadata::setModelIdForMoleculeId(std::string mol_id, std::string mod_id)
+void Metadata::setModelIdForInstanceId(std::string inst_id, std::string mod_id)
 {
-	_mol2Model[mol_id] = mod_id;
+	_inst2Model[inst_id] = mod_id;
 
 }

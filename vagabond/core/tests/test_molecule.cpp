@@ -26,21 +26,3 @@
 
 namespace tt = boost::test_tools;
 
-BOOST_AUTO_TEST_CASE(molecule_map_molecule)
-{
-	Environment::env().load("rope.json");
-	Entity *ent = &Environment::entityManager()->object(0);
-	PositionalGroup group = ent->makePositionalDataGroup();
-
-	Cluster<PositionalGroup> *cx = new ClusterSVD<PositionalGroup>(group);
-	cx->cluster();
-	
-	for (size_t i = 0; i < cx->rows(); i++)
-	{
-		for (size_t j = 0; j < cx->columns(); j++)
-		{
-			std::cout << cx->dataGroup()->differenceVector(j)[i] << ", ";
-		}
-		std::cout << std::endl;
-	}
-}

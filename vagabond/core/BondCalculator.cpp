@@ -252,6 +252,7 @@ void BondCalculator::prepareThreads()
 
 void BondCalculator::start()
 {
+	_started = true;
 	sanityCheckDepthLimits();
 
 	_finish = false;
@@ -358,6 +359,10 @@ void BondCalculator::sanityCheckJob(Job &job)
 
 int BondCalculator::submitJob(Job &original_job)
 {
+	if (!_started)
+	{
+		std::cout << "Warning! BondCalculator not started yet" << std::endl;
+	}
 	sanityCheckJob(original_job);
 
 	Job *job = new Job(original_job);
@@ -381,6 +386,8 @@ Job *BondCalculator::acquireJob()
 
 void BondCalculator::finish()
 {
+	_started = false;
+
 	if (_ffHandler != nullptr)
 	{
 		_ffHandler->finish();
@@ -442,7 +449,7 @@ void BondCalculator::finish()
 
 const size_t BondCalculator::maxCustomVectorSize() const
 {
-	return _sequenceHandler->torsionCount();
+	return _sequenceHandler->parameterCount();
 }
 
 
@@ -469,4 +476,14 @@ BondSequence *BondCalculator::sequence(int i)
 	}
 	
 	return nullptr;
+}
+
+TorsionBasis *BondCalculator::torsionBasis()
+{
+	return sequenceHandler()->torsionBasis();
+}
+
+const Grapher &BondCalculator::grapher() const
+{
+	return _sequenceHandler->sequence(0)->grapher();
 }

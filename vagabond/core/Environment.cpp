@@ -26,7 +26,7 @@
 
 #include <iostream>
 #include <fstream>
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -60,7 +60,9 @@ void Environment::save()
 	data["entity_manager"] = *_entityManager;
 	data["path_manager"] = *_pathManager;
 	data["metadata"] = *_metadata;
+#ifdef __EMSCRIPTEN__
 	std::string contents = data.dump();
+#endif
 	
 	std::ofstream file;
 	file.open("rope.json");
@@ -72,6 +74,21 @@ void Environment::save()
 	EM_ASM_({ window.download = download; window.download($0, $1, $2) }, 
 	        "rope.json", contents.c_str(), contents.length());
 #endif
+}
+
+void Environment::loadEntitiesBackwardsCompatible(const json &data)
+{
+	try
+	{
+		*_entityManager = data["entity_manager"];
+	}
+	catch (const json::exception &err)
+	{
+		// old version of RoPE, before split between polymers and entities.
+		std::cout << "Trying to fix problem" << std::endl;
+		_entityManager = new EntityManager();
+		_entityManager->setPolymerEntityManager(data["entity_manager"]);
+	}
 }
 
 void Environment::load(std::string file)
@@ -99,8 +116,10 @@ void Environment::load(std::string file)
 	try
 	{
 		*_fileManager = data["file_manager"];
-		 *_modelManager = data["model_manager"];
-		 *_entityManager = data["entity_manager"];
+		*_modelManager = data["model_manager"];
+
+		 loadEntitiesBackwardsCompatible(data);
+
 		*_metadata = data["metadata"];
 		*_pathManager = data["path_manager"];
 	}
@@ -126,15 +145,11 @@ void Environment::load(std::string file)
 void Environment::rescanModels()
 {
 	ModelManager *mm = Environment::modelManager();
-	
-	for (Model &m : mm->objects())
-	{
-		mm->clickTicker();
-		m.autoAssignEntities();
-	}
-
 	EntityManager *em = Environment::entityManager();
+	
+	mm->rescan();
 	em->checkModelsForReferences(mm);
+
 	mm->finishTicker();
 }
 
@@ -148,10 +163,10 @@ void Environment::autoModel()
 	mm->finishTicker();
 }
 
-void Environment::purgeMolecule(Molecule *mol)
+void Environment::purgeInstance(Instance *inst)
 {
-	entityManager()->purgeMolecule(mol);
-	modelManager()->purgeMolecule(mol);
+	entityManager()->purgeInstance(inst);
+	modelManager()->purgeInstance(inst);
 }
 
 void Environment::purgeEntity(std::string id)

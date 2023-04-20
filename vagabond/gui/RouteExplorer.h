@@ -23,10 +23,11 @@
 
 #include "Display.h"
 #include <vagabond/gui/elements/DragResponder.h>
+#include <thread>
 
 class PlausibleRoute;
 class TextButton;
-class Molecule;
+class Instance;
 class Slider;
 class Route;
 
@@ -51,7 +52,7 @@ private:
 	void setupSettings();
 	Route *_route = nullptr;
 	PlausibleRoute *_plausibleRoute = nullptr;
-	Molecule *_molecule = nullptr;
+	Instance *_instance = nullptr;
 
 	Slider *_rangeSlider = nullptr;
 	TextButton *_startPause = nullptr;

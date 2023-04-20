@@ -27,6 +27,7 @@
 #include "BondCalculator.h"
 #include "PositionRefinery.h"
 #include "Sequence.h"
+#include "PdbFile.h"
 
 #include <algorithm>
 #include <iostream>
@@ -37,34 +38,25 @@ AtomGroup::AtomGroup() : HasBondstraints()
 
 }
 
-void AtomGroup::alignAnchor()
+void AtomGroup::writeToFile(std::string name)
 {
-	try
-	{
-		AlignmentTool tool(this);
-		tool.run();
-		recalculate();
-	}
-	catch (const std::runtime_error &err)
-	{
-		std::cout << "Giving up: " << err.what() << std::endl;
-	}
+	PdbFile::writeAtoms(this, name);
 }
 
 void AtomGroup::cancelRefinement()
 {
-	if (_engine != nullptr)
+	if (_refinery != nullptr)
 	{
-		_engine->finish();
+		_refinery->finish();
 	}
 }
 
 void AtomGroup::cleanupRefinement()
 {
-	if (_engine != nullptr)
+	if (_refinery != nullptr)
 	{
-		delete _engine;
-		_engine = nullptr;
+		delete _refinery;
+		_refinery = nullptr;
 	}
 	
 	if (_refine != nullptr)
@@ -121,11 +113,7 @@ void AtomGroup::add(Atom *a)
 	if (a != nullptr && !hasAtom(a))
 	{
 		_atoms.push_back(a);
-		
-		for (size_t j = 0; j < a->bondLengthCount(); j++)
-		{
-			addBondstraint(a->bondLength(j));
-		}
+		addBondstraintsFrom(a);
 		
 		_desc2Atom[a->desc()] = a;
 		_orderedPointers.insert(a);
@@ -320,7 +308,7 @@ Atom *AtomGroup::firstAtomWithName(std::string name) const
 	return nullptr;
 }
 
-Atom *AtomGroup::chosenAnchor()
+Atom *AtomGroup::chosenAnchor(bool min)
 {
 	if (_chosenAnchor != nullptr)
 	{
@@ -333,23 +321,15 @@ Atom *AtomGroup::chosenAnchor()
 		return nullptr;
 	}
 	
-	int min_res = INT_MAX;
-	std::string desc = "";
+	int found_res = (min ? INT_MAX : -INT_MAX);
 	
 	for (size_t i = 0; i < possibleAnchorCount(); i++)
 	{
 		int res = possibleAnchor(i)->residueNumber();
-		if (res < min_res)
+		if ((min && (res < found_res)) || (!min && (res > found_res)))
 		{
-			if (desc.length() > 0 && possibleAnchor(i)->desc() < desc)
-			{
-				continue;
-			}
-
 			_chosenAnchor = possibleAnchor(i);
-			min_res = res;
-			desc = possibleAnchor(i)->desc();
-			
+			found_res = res;
 		}
 	}
 
@@ -365,6 +345,12 @@ void AtomGroup::recalculate()
 		for (size_t i = 0; i < _connectedGroups.size(); i++)
 		{
 			Atom *anchor = _connectedGroups[i]->chosenAnchor();
+			
+			if (!anchor->isTransformed())
+			{
+				AlignmentTool tool(_connectedGroups[i]);
+				tool.run(anchor);
+			}
 
 			BondCalculator calculator;
 			calculator.setPipelineType(BondCalculator::PipelineAtomPositions);
@@ -391,14 +377,15 @@ void AtomGroup::recalculate()
 	}
 }
 
-void AtomGroup::refinePositions(bool sameThread)
+void AtomGroup::refinePositions(bool sameThread, bool thorough)
 {
-	if (_engine && !_engine->isDone())
+	if (_refinery && !_refinery->isDone())
 	{
 		return;
 	}
 
 	PositionRefinery *refinery = new PositionRefinery(this);
+	refinery->setThorough(thorough);
 
 	cancelRefinement();
 	cleanupRefinement();
@@ -409,7 +396,7 @@ void AtomGroup::refinePositions(bool sameThread)
 	}
 	else
 	{
-		_engine = refinery;
+		_refinery = refinery;
 		_refine = new std::thread(&PositionRefinery::backgroundRefine, refinery);
 	}
 }
@@ -435,12 +422,15 @@ void AtomGroup::add(AtomGroup *g)
 	}
 }
 
-std::vector<AtomGroup *> &AtomGroup::connectedGroups()
+std::vector<AtomGroup *> &AtomGroup::connectedGroups(bool forSequence)
 {
-	if (_connectedGroups.size())
+	if (_connectedGroups.size() && _forSequence == forSequence)
 	{
 		return _connectedGroups;
 	}
+
+	_forSequence = forSequence;
+	deleteConnectedGroups();
 
 	std::vector<AtomGroup *> groups;
 	AtomGroup total = AtomGroup(*this);
@@ -456,10 +446,17 @@ std::vector<AtomGroup *> &AtomGroup::connectedGroups()
 		}
 
 		AnchorExtension ext{anchor, UINT_MAX};
-		grapher.setSingleChain(true);
+		
+		if (forSequence)
+		{
+			grapher.setInSequence(true);
+		}
+
 		grapher.generateGraphs(ext);
 		
 		AtomGroup *next = new AtomGroup();
+		next->setGrabsBondstraints(true);
+
 		for (size_t i = 0; i < grapher.graphCount(); i++)
 		{
 			Atom *a = grapher.graph(i)->atom;
@@ -598,4 +595,22 @@ glm::vec3 AtomGroup::initialCentre()
 void AtomGroup::finishedRefining()
 {
 	triggerResponse();
+}
+
+AtomGroup AtomGroup::extractFragment(Sequence frag)
+{
+	AtomGroup select;
+	
+	for (Atom *a : _atoms)
+	{
+		for (const Residue &r : frag.residues())
+		{
+			if (a->residueId() == r.id())
+			{
+				select += a;
+			}
+		}
+	}
+
+	return select;
 }

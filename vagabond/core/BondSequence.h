@@ -24,7 +24,9 @@
 #include <vector>
 #include <climits>
 #include "../utils/glm_import.h"
+#include <vagabond/utils/version.h>
 #include "Atom.h"
+#include "programs/RingProgram.h"
 #include "HasBondSequenceCustomisation.h"
 #include "BondSequenceHandler.h"
 #include "BondTorsion.h"
@@ -132,11 +134,10 @@ public:
 	
 	void multiplyUpBySampleCount();
 	void reflagDepth(int min, int max, int sidemax);
-	void reflagDepthOld(int min, int max, int sidemax);
 	
 	const size_t flagged() const;
 
-	std::vector<bool> atomMask();
+	std::vector<bool> activeParameterMask(size_t *programs);
 	
 	void prepareForIdle();
 	void prepareTorsionBasis();
@@ -219,7 +220,6 @@ private:
 	void setJob(Job *job);
 	void printBlock(int idx);
 	
-	glm::mat4x4 _torsion_rot = glm::mat4(1.f);
 	bool _fullRecalc = true;
 	int _sampleNum = 0;
 	int _startCalc = 0;
@@ -236,6 +236,14 @@ private:
 	TorsionBasis *_torsionBasis = nullptr;
 	TorsionBasis::Type _basisType;
 	Sampler *_sampler = nullptr;
+	std::vector<RingProgram> _programs;
+#ifdef VERSION_PROLINE
+	bool _usingPrograms = true;
+#else
+	bool _usingPrograms = false;
+#endif
+
+	bool _programsInitialised = false;
 	
 	float *_currentVec = nullptr;
 

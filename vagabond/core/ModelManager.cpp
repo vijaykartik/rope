@@ -72,6 +72,20 @@ void ModelManager::housekeeping()
 	connectionsToDatabase();
 }
 
+void ModelManager::rescan()
+{
+	_mutex->lock();
+
+	for (Model &m : objects())
+	{
+		clickTicker();
+		m.autoAssignEntities();
+	}
+
+	finishTicker();
+	_mutex->unlock();
+}
+
 void ModelManager::autoModel()
 {
 	_mutex->lock();
@@ -103,6 +117,19 @@ void ModelManager::autoModel()
 	_mutex->unlock();
 }
 
+Model *ModelManager::modelUsingFilename(std::string &filename)
+{
+	for (Model &m : _objects)
+	{
+		if (m.filename() == filename)
+		{
+			return &m;
+		}
+	}
+
+	return nullptr;
+}
+
 void ModelManager::purgeModel(Model *model)
 {
 	std::list<Model>::iterator it = _objects.begin();
@@ -124,11 +151,11 @@ void ModelManager::purgeModel(Model *model)
 	Manager::triggerResponse();
 }
 
-void ModelManager::purgeMolecule(Molecule *mol)
+void ModelManager::purgeInstance(Instance *inst)
 {
 	for (Model &m : _objects)
 	{
-		m.throwOutMolecule(mol);
+		m.throwOutInstance(inst);
 	}
 }
 
@@ -144,15 +171,13 @@ void ModelManager::connectionsToDatabase()
 {
 	for (Model &m : _objects)
 	{
-		for (Molecule &mol : m.molecules())
+		std::vector<Instance *> instances = m.instances();
+		for (Instance *inst : instances)
 		{
-			mol.housekeeping();
-			std::string mol_id = mol.model_chain_id();
-			std::string mod_id = mol.model_id();
-			Environment::metadata()->setModelIdForMoleculeId(mol_id, mod_id);
-
+			inst->housekeeping();
+			std::string mol_id = inst->id();
+			std::string mod_id = inst->model_id();
+			Environment::metadata()->setModelIdForInstanceId(mol_id, mod_id);
 		}
 	}
-
-
 }

@@ -23,6 +23,8 @@ public:
 	void setModal(Modal *modal)
 	{
 		_modal = modal;
+		_left = false;
+		_right = false;
 	}
 	
 	void setBackScene(Scene *prev)
@@ -106,6 +108,7 @@ protected:
 	int _lastIdx;
 
 	bool _moving = false;
+	bool _expired = false;
 	bool _mouseDown = false;
 	bool _mustRefresh = false;
 	

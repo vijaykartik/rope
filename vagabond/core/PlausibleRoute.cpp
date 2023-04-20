@@ -17,17 +17,16 @@
 // Please email: vagabond @ hginn.co.uk for more details.
 
 #include "PlausibleRoute.h"
-#include "Molecule.h"
+#include "Polymer.h"
 #include "MetadataGroup.h"
 #include "Grapher.h"
 #include <vagabond/c4x/Cluster.h>
 #include <vagabond/utils/polyfit.h>
 
-PlausibleRoute::PlausibleRoute(Molecule *mol, Cluster<MetadataGroup> *cluster,
+PlausibleRoute::PlausibleRoute(Instance *inst, Cluster<MetadataGroup> *cluster,
                                int dims)
-: Route(mol, cluster, dims)
+: Route(inst, cluster, dims)
 {
-	_maxJobRuns = 20;
 	_maximumCycles = 5;
 }
 
@@ -46,7 +45,7 @@ void PlausibleRoute::setTargets()
 	twoPointProgression();
 	submitJobAndRetrieve(0);
 	
-	_molecule->model()->write("start.pdb");
+	_instance->model()->write("start.pdb");
 
 	for (Atom *atom : _fullAtoms->atomVector())
 	{
@@ -55,7 +54,7 @@ void PlausibleRoute::setTargets()
 	}
 
 	submitJobAndRetrieve(1);
-	_molecule->model()->write("finish.pdb");
+	_instance->model()->write("finish.pdb");
 
 	for (Atom *atom : _fullAtoms->atomVector())
 	{
@@ -124,16 +123,11 @@ void PlausibleRoute::postScore(float score)
 
 bool PlausibleRoute::validateMainTorsion(int i, bool over_mag)
 {
-	if (_mainsOnly && !torsion(i)->coversMainChain())
+	if (_mainsOnly && !parameter(i)->coversMainChain())
 	{
 		return false;
 	}
 	
-	if (!usingTorsion(i))
-	{
-		return false;
-	}
-
 	float magnitude = fabs(destination(i));
 	if (over_mag && magnitude < _magnitudeThreshold)
 	{
@@ -159,6 +153,14 @@ int PlausibleRoute::countTorsions()
 
 void PlausibleRoute::prepareAnglesForRefinement(std::vector<int> &idxs)
 {
+	if (_simplex)
+	{
+		delete _simplex;
+		_simplex = nullptr;
+	}
+	
+	_simplex = new SimplexEngine(this);
+
 	_activeTorsions = idxs;
 	_paramPtrs.clear();
 	_paramStarts.clear();
@@ -187,25 +189,31 @@ void PlausibleRoute::prepareAnglesForRefinement(std::vector<int> &idxs)
 		}
 	}
 	
-	setDimensionCount(_paramPtrs.size());
-	setMaxJobsPerVertex(1);
-	chooseStepSizes(steps);
+	_simplex->setMaxRuns(20);
+	_simplex->chooseStepSizes(steps);
+}
+
+size_t PlausibleRoute::parameterCount()
+{
+	return _paramPtrs.size();
 }
 
 bool PlausibleRoute::simplexCycle(std::vector<int> torsionIdxs)
 {
 	prepareAnglesForRefinement(torsionIdxs);
+
 	if (_paramPtrs.size() == 0)
 	{
 		return false;
 	}
 
 	_bestScore = routeScore(_nudgeCount);
-	run();
+
+	_simplex->start();
 
 	bool changed = false;
 
-	float bs = bestScore();
+	float bs = _simplex->bestScore();
 	if (bs < _bestScore - 1e-6)
 	{
 		_bestScore = bs;
@@ -366,14 +374,12 @@ std::vector<int> PlausibleRoute::getTorsionSequence(int start, int max,
 
 bool PlausibleRoute::flipTorsion(int idx)
 {
-	std::vector<int> idxs = getTorsionSequence(idx, 4, false, 30.f);
+	std::vector<int> idxs = getTorsionSequence(idx, 5, false, 30.f);
 	
 	if (idxs.size() == 0)
 	{
 		return false;
 	}
-	
-	std::cout << "Idx count: " << idxs.size() << std::endl;
 
 	std::vector<bool> best(idxs.size(), false);
 	for (size_t i = 0; i < idxs.size(); i++)
@@ -399,8 +405,6 @@ bool PlausibleRoute::flipTorsion(int idx)
 
 	setFlips(idxs, best);
 	postScore(_bestScore);
-//	print(best);
-//	std::cout << std::endl;
 	
 	return changed;
 }
@@ -441,7 +445,6 @@ bool PlausibleRoute::flipTorsions(bool main)
 		changed |= flipTorsion(i);
 	}
 	
-	clearMask();
 	finishTicker();
 
 	return changed;
@@ -483,10 +486,7 @@ void PlausibleRoute::nudgeWayPointCycles()
 		
 		int total = countTorsions();
 		int change = nudgeWaypoints();
-		/*
-		std::cout << "Changed: " << change << " / " << total << ", "
-		<< "score: " << _bestScore << std::endl;
-		*/
+
 		float frac = (float)change / (float)total;
 		count++;
 		big_count++;
@@ -744,7 +744,7 @@ void PlausibleRoute::calculateProgression(int steps)
 	}
 }
 
-void PlausibleRoute::assignParameterValues(const SPoint &trial)
+void PlausibleRoute::assignParameterValues(const std::vector<float> &trial)
 {
 	assert(trial.size() == _paramPtrs.size());
 
@@ -785,9 +785,9 @@ bool PlausibleRoute::validateWayPoints()
 	return true;
 }
 
-int PlausibleRoute::sendJob(const SPoint &trial, bool force_update)
+int PlausibleRoute::sendJob(const std::vector<float> &all)
 {
-	assignParameterValues(trial);
+	assignParameterValues(all);
 	bool valid = validateWayPoints();
 	float result = FLT_MAX;
 	
@@ -796,25 +796,9 @@ int PlausibleRoute::sendJob(const SPoint &trial, bool force_update)
 		result = routeScore(_nudgeCount);
 	}
 	
-	_results[_jobNum] = result;
-	_jobNum++;
-	return (_jobNum - 1);
-}
-
-int PlausibleRoute::awaitResult(double *eval)
-{
-	if (_results.size() == 0)
-	{
-		return -1;
-	}
-
-	int val = _results.begin()->first;
-	float result = _results.begin()->second;
-	
-	_results.erase(_results.begin());
-
-	*eval = result;
-	return val;
+	int ticket = getNextTicket();
+	setScoreForTicket(ticket, result);
+	return ticket;
 }
 
 void PlausibleRoute::prepareForAnalysis()
@@ -887,19 +871,27 @@ void PlausibleRoute::printWaypoints()
 	std::cout << ",start,end,";
 	std::cout << std::endl;
 
-	for (size_t i = 0; i < torsionCount(); i++)
+	for (size_t i = 0; i < parameterCount(); i++)
 	{
-		BondTorsion *t = torsion(i);
+		Parameter *t = parameter(i);
 		
 		if (!t->coversMainChain())
 		{
 			continue;
 		}
 		
-		float start = t->refinedAngle();
+		float start = t->value();
 		float diff = getTorsionAngle(i);
 		
-		std::cout << t->atom(1)->desc() << ":" << t->desc() << ",";
+		if (t->isTorsion())
+		{
+			BondTorsion *tmp = static_cast<BondTorsion *>(t);
+			std::cout << tmp->atom(1)->desc() << ":" << tmp->desc() << ",";
+		}
+		else
+		{
+			std::cout << t->desc() << ",";
+		}
 		std::cout << start << "," << start + diff << ",";
 		
 		PolyFit fit = polynomialFit(i);

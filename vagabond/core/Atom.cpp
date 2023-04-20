@@ -143,7 +143,20 @@ void Atom::setCode(std::string code)
 	_code = code;
 }
 
-Atom *Atom::connectedAtom(int i)
+bool Atom::isConnectedToAtom(Atom *a) const
+{
+	for (size_t i = 0; i < bondLengthCount(); i++)
+	{
+		if (connectedAtom(i) == a)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+Atom *Atom::connectedAtom(int i) const
 {
 	return bondLength(i)->otherAtom(this);
 }
@@ -341,6 +354,7 @@ glm::mat4x4 Atom::coordinationMatrix(Atom *children[4], int count, Atom *prev)
 		}
 		else if (count == 2)
 		{
+
 			insert_three_atoms(tmp, lengths, angles);
 		}
 		else if (count == 1)
@@ -349,7 +363,7 @@ glm::mat4x4 Atom::coordinationMatrix(Atom *children[4], int count, Atom *prev)
 		}
 
 		checkChirality(tmp, prev, children, count);
-		
+
 		for (size_t i = 0; i < 3; i++)
 		{
 			/* now remove the prev bond as we're not going backwards */
@@ -396,7 +410,7 @@ const std::string Atom::desc() const
 	{
 		str += _chain + "-";
 	}
-	str +=  code() + i_to_str(residueNumber()) + ":" + atomName();
+	str += code() + i_to_str(residueNumber()) + ":" + atomName();
 	return str;
 }
 
@@ -422,7 +436,7 @@ bool Atom::isReporterAtom() const
 	return isReporterAtom(atomName());
 }
 
-int Atom::bondsBetween(Atom *end, int maxBonds)
+int Atom::bondsBetween(Atom *end, int maxBonds, bool long_way)
 {
 	if (chain() != end->chain())
 	{
@@ -438,10 +452,11 @@ int Atom::bondsBetween(Atom *end, int maxBonds)
 	{
 		BondNum bn = bnums.back();
 		bnums.pop_back();
+		int candidate = maxBonds - bn.num;
 		
 		if (bn.atom == end)
 		{
-			return maxBonds - bn.num;
+			return candidate;
 		}
 
 		if (bn.num == 0)
@@ -453,6 +468,11 @@ int Atom::bondsBetween(Atom *end, int maxBonds)
 		{
 			BondLength *bl = bn.atom->bondLength(i);
 			Atom *other = bl->otherAtom(bn.atom);	
+			
+			if (long_way && bn.atom == this && other == end)
+			{
+				continue;
+			}
 
 			if (rejected.count(other))
 			{

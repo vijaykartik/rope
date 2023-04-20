@@ -18,7 +18,7 @@
 
 #include <iostream>
 #include "TorsionBasis.h"
-#include "BondTorsion.h"
+#include "Parameter.h"
 #include "SimpleBasis.h"
 #include "ConcertedBasis.h"
 #include "engine/MechanicalBasis.h"
@@ -56,39 +56,44 @@ TorsionBasis *TorsionBasis::newBasis(Type type)
 
 void TorsionBasis::absorbVector(const float *vec, int n, bool *mask)
 {
-	for (size_t i = 0; i < torsionCount(); i++)
+	for (size_t i = 0; i < parameterCount(); i++)
 	{
 		if (mask && !mask[i])
 		{
 			continue;
 		}
 
-		float torsion = torsionForVector(i, vec, n);
-		_torsions[i]->setRefinedAngle(torsion);
+		float torsion = parameterForVector(i, vec, n);
+		
+//		std::cout << _params[i]->desc() << " " << torsion << std::endl;
+		
+		_params[i]->setValue(torsion);
 		_angles[i].angle = torsion;
+		
+		_params[i]->setRefined(true);
 	}
 
 }
 
-int TorsionBasis::addTorsion(BondTorsion *torsion, Atom *atom)
+int TorsionBasis::addParameter(Parameter *param, Atom *atom)
 {
-	if (torsion == nullptr || torsion->isConstrained())
+	if (param == nullptr || param->isConstrained())
 	{
 		return -1;
 	}
 	
-	for (size_t i = 0; i < _torsions.size(); i++)
+	for (size_t i = 0; i < _params.size(); i++)
 	{
-		if (_torsions[i] == torsion)
+		if (_params[i] == param)
 		{
 			return i;
 		}
 	}
 
-	_torsions.push_back(torsion);
+	_params.push_back(param);
 	_atoms.push_back(atom);
 
-	return _torsions.size() - 1;
+	return _params.size() - 1;
 }
 
 void TorsionBasis::prepare(int dims)
@@ -96,16 +101,53 @@ void TorsionBasis::prepare(int dims)
 
 }
 
-int TorsionBasis::indexForTorsion(BondTorsion *bt)
+int TorsionBasis::indexForParameter(Parameter *p)
 {
 	int i = 0;
-	for (BondTorsion *torsion : _torsions)
+	for (Parameter *param : _params)
 	{
-		if (bt == torsion)
+		if (p == param)
 		{
 			return i;
 		}
 		i++;
 	}
 	return -1;
+}
+
+void TorsionBasis::trimParametersToUsed(std::set<Parameter *> &params)
+{
+	bool again = true;
+	
+	while (again)
+	{
+		again = false;
+		for (Parameter *p : params)
+		{
+			int idx = indexForParameter(p);
+
+			if (idx < 0)
+			{
+				params.erase(p); // iterator could be invalidated
+				again = true; 
+				break;
+			}
+		}
+	}
+}
+
+std::vector<int> TorsionBasis::grabIndices(const std::set<Parameter *> &params)
+{
+	std::vector<int> indices;
+	for (Parameter *p : params)
+	{
+		int idx = indexForParameter(p);
+		
+		if (idx >= 0)
+		{
+			indices.push_back(idx);
+		}
+	}
+	
+	return indices;
 }

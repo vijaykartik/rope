@@ -126,20 +126,22 @@ std::vector<Renderable *> &Scene::pertinentObjects()
 
 void Scene::mouseReleaseEvent(double x, double y, SDL_MouseButtonEvent button)
 {
+	if (_expired) return;
 	_dragged = nullptr;
 	convertToGLCoords(&x, &y);
-	_left = button.button == SDL_BUTTON_LEFT;
 
 	if (_modal != nullptr && _chosen == nullptr)
 	{
 		double z = -FLT_MAX;
 		bool hit = _modal->intersectsRay(x, y, &z);
 
-		if (!hit)
+		if (!hit && _left)
 		{
 			_modal->dismiss();
 		}
 	}
+
+	_left = button.button == SDL_BUTTON_LEFT;
 
 	if (hasIndexedObjects() > 0 && _modal == nullptr && _chosen == nullptr)
 	{
@@ -152,6 +154,8 @@ void Scene::mouseReleaseEvent(double x, double y, SDL_MouseButtonEvent button)
 
 void Scene::mousePressEvent(double x, double y, SDL_MouseButtonEvent button)
 {
+	if (_expired) return;
+
 	_lastX = x;
 	_lastY = y;
 	convertToGLCoords(&x, &y);
@@ -164,16 +168,22 @@ void Scene::mousePressEvent(double x, double y, SDL_MouseButtonEvent button)
 
 	if (chosen != nullptr)
 	{
-		chosen->click(_left);
 		if (chosen->isDraggable())
 		{
+			std::cout  << "Draggable: " << chosen->name() << std::endl;
 			_dragged = chosen;
 		}
+
+		// warning: clicking the chosen object may result in its destruction
+		chosen->click(_left);
+		// don't use the pointer afterwards
 	}
 }
 
 void Scene::mouseMoveEvent(double x, double y)
 {
+	if (_expired) return;
+
 	double tx = x;
 	double ty = y;
 	convertToGLCoords(&tx, &ty);
@@ -304,6 +314,8 @@ void Scene::back(int num)
 			_previous->refresh();
 		}
 	}
+	
+	_expired = true;
 }
 
 void Scene::interpretControlKey(SDL_Keycode pressed, bool dir)
@@ -345,13 +357,13 @@ void Scene::setInformation(std::string str)
 	if (_info != nullptr)
 	{
 		removeObject(_info);
-		delete _info;
+		Window::setDelete(_info);
 		_info = nullptr;
 	}
 
 	if (str.length())
 	{
-		_info = new TextButton(str, this);
+		_info = new TextButton(str, this, true);
 		_info->setReturnTag("remove_info");
 		_info->resize(0.6);
 		_info->setCentre(0.5, 0.16);

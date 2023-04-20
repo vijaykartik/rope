@@ -22,7 +22,7 @@
 
 ChemotaxisEngine::ChemotaxisEngine(RunsEngine *ref) : Engine(ref)
 {
-	_hypersphere = new Hypersphere(n() - 1, n() * 5);
+	_hypersphere = new Hypersphere(n() - 1, n() * 10);
 }
 
 ChemotaxisEngine::~ChemotaxisEngine()
@@ -31,21 +31,15 @@ ChemotaxisEngine::~ChemotaxisEngine()
 	_hypersphere = nullptr;
 }
 
-void ChemotaxisEngine::start()
+void ChemotaxisEngine::run()
 {
-	if (n() == 0)
-	{
-		return;
-	}
-
 	_hypersphere->prepareFibonacci();
 	
-	currentScore();
-	std::cout << "Start: " << -bestScore() << std::endl;
-	
-	while (cycle())
+	int count = 0;
+	while (count < _maxRuns)
 	{
-
+		cycle();
+		count++;
 	}
 
 	currentScore();
@@ -54,6 +48,7 @@ void ChemotaxisEngine::start()
 bool ChemotaxisEngine::cycle()
 {
 	bool success = false;
+	_original = _step;
 	
 	while (!success)
 	{
@@ -62,6 +57,10 @@ bool ChemotaxisEngine::cycle()
 		if (!success)
 		{
 			_step /= 2;
+		}
+		else
+		{
+			_step = _original;
 		}
 		
 		if (_step < 0.01)
@@ -75,41 +74,31 @@ bool ChemotaxisEngine::cycle()
 
 	}
 	
-	std::cout << "Now: ";
 	const std::vector<float> &curr = current();
-	
-	for (size_t i = 0; i < curr.size(); i++)
-	{
-		std::cout << curr[i] << " ";
-	}
-	std::cout << std::endl;
-
 	
 	return true;
 }
 
 bool ChemotaxisEngine::tumble()
 {
+	float current = bestScore();
+	setCurrent(bestResult());
+
 	for (size_t i = 0; i < _hypersphere->count(); i++)
 	{
 		std::vector<float> pt = _hypersphere->scaled_point(i, _step);
+		
 		add_current_to(pt);
 		sendJob(pt);
 	}
 
 	getResults();
-	
-	float current = bestScore();
+	float new_score = bestScore();
 
-	float new_score = 0;
-	std::vector<float> chosen = findBestResult(&new_score);
+	std::vector<float> chosen = bestResult();
 	std::vector<float> diff = difference_from(chosen);
 	
 	bool better = (new_score < current);
-
-	std::cout << "After tumbling: " << -new_score << " (";
-	std::cout << (better ? "improved" : "worse");
-	std::cout << ")" << std::endl;
 
 	if (better)
 	{
@@ -129,9 +118,11 @@ bool ChemotaxisEngine::tumble()
 	return false;
 }
 
-bool ChemotaxisEngine::run()
+bool ChemotaxisEngine::runner()
 {
+	float curr = bestScore();
 	std::vector<float> pt = current();
+
 	for (size_t i = 0; i < 10; i++)
 	{
 		add_to(pt, _direction);
@@ -139,15 +130,10 @@ bool ChemotaxisEngine::run()
 	}
 
 	getResults();
-	float new_score = 0;
-	std::vector<float> chosen = findBestResult(&new_score);
+	float new_score = bestScore();
+	std::vector<float> chosen = bestResult();
 	
-	float current = bestScore();
-	bool better = (new_score < current);
-
-	std::cout << "After running: " << -new_score << " (";
-	std::cout << (better ? "improved" : "worse");
-	std::cout << ")" << std::endl;
+	bool better = (new_score < curr);
 
 	if (better)
 	{

@@ -24,7 +24,7 @@
 #include <vagabond/utils/FileReader.h>
 #include "TorsionRef.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 class Sequence;
@@ -99,6 +99,10 @@ public:
 	
 	void housekeeping();
 	
+	bool hasTorsionRef(TorsionRef &ref) const;
+	
+	/* note that this will only update the current residue, and not affect
+	 * any associated master residues. */
 	void addTorsionRef(TorsionRef &ref);
 	TorsionRef copyTorsionRef(const std::string &desc);
 	void replaceTorsionRef(TorsionRef &newRef);
@@ -122,7 +126,11 @@ inline void to_json(json &j, const Residue &value)
 	j["id"] = value._id;
 	j["chain"] = value._chain;
 	j["code"] = value._code;
-	j["nout"] = value._nothing; // saves a lot of characters
+	
+	if (value._nothing)
+	{
+		j["nout"] = value._nothing; // saves a lot of characters
+	}
 	j["torsions"] = value._refs;
 }
 
@@ -133,6 +141,7 @@ inline void from_json(const json &j, Residue &value)
 	j.at("chain").get_to(value._chain);
 	j.at("code").get_to(value._code);
 	
+	value._nothing = false;
 	try
 	{
 		if (j.count("nothing"))
@@ -162,25 +171,6 @@ inline void from_json(const json &j, Residue &value)
 }
 
 class Entity;
-
-struct ResidueTorsion
-{
-	TorsionRef torsion{};
-	Residue *residue = nullptr;
-	Entity *entity = nullptr;
-	
-	std::string desc() const
-	{
-		if (residue == nullptr)
-		{
-			std::string id = "t-null:" + torsion.desc();
-			return id;
-		}
-
-		std::string id = "t" + residue->id().as_string() + ":" + torsion.desc();
-		return id;
-	}
-};
 
 struct Atom3DPosition
 {

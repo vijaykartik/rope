@@ -139,7 +139,6 @@ void PdbFile::processModel(gemmi::Model &m)
 void PdbFile::parseFileContents()
 {
 	std::string path = toFilename(_filename);
-	std::cout << "Reading file " << path << std::endl;
 
 	gemmi::Structure st;
 	try
@@ -187,14 +186,20 @@ void PdbFile::writeAtoms(AtomGroup *grp, std::string name)
 	st.models.push_back(gemmi::Model(name));
 	
 	gemmi::Model &m = st.models.front();
-	m.chains.push_back(gemmi::Chain("A"));
-	gemmi::Chain &c = m.chains.front();
+	gemmi::Chain *c = nullptr;
 	
 	ResidueId prev("");
 	gemmi::Residue *last = nullptr;
 	for (size_t i = 0; i < grp->size(); i++)
 	{
 		Atom *atom = (*grp)[i];
+
+		if (!c || atom->chain() != c->name)
+		{
+			m.chains.push_back(gemmi::Chain(atom->chain()));
+			c = &m.chains.back();
+		}
+
 		const ResidueId &id = atom->residueId();
 		if (id != prev)
 		{
@@ -202,8 +207,8 @@ void PdbFile::writeAtoms(AtomGroup *grp, std::string name)
 			gemmi::ResidueId gemmi_id;
 			gemmi_id.seqid = gemmi::SeqId(id.num, insert);
 			gemmi_id.name = atom->code();
-			c.residues.push_back(gemmi::Residue(gemmi_id));
-			last = &(c.residues.back());
+			c->residues.push_back(gemmi::Residue(gemmi_id));
+			last = &(c->residues.back());
 			prev = id;
 		}
 		
@@ -218,10 +223,11 @@ void PdbFile::writeAtoms(AtomGroup *grp, std::string name)
 			a.pos.y = pos.y;
 			a.pos.z = pos.z;
 		}
+		
 	}
 
 	std::ofstream file;
-	file.open(_filename);
+	file.open(name);
 	
 	gemmi::write_pdb(st, file);
 	

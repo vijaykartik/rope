@@ -31,6 +31,11 @@ const std::string Residue::one_letter_code() const
 	return gemmi::one_letter_code(std::vector<std::string>(1, _code));
 }
 
+bool Residue::hasTorsionRef(TorsionRef &ref) const
+{
+	return _refs.count(ref) > 0;
+}
+
 void Residue::addTorsionRef(TorsionRef &ref)
 {
 	_refs.insert(ref);
@@ -65,6 +70,7 @@ void Residue::replaceTorsionRef(TorsionRef &newRef)
 bool Residue::supplyRefinedAngle(std::string desc, double angle, bool tmp)
 {
 	TorsionRef copy = copyTorsionRef(desc);
+
 	if (!copy.valid())
 	{
 		return false;
@@ -72,6 +78,7 @@ bool Residue::supplyRefinedAngle(std::string desc, double angle, bool tmp)
 
 	tmp ? copy.setTmpAngle(angle) : copy.setRefinedAngle(angle);
 	replaceTorsionRef(copy);
+
 	return true;
 }
 

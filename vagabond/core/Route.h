@@ -24,16 +24,18 @@
 
 class Grapher;
 struct AtomGraph;
+class ResidueTorsion;
+class RouteValidator;
 
 class Route : public StructureModification, public HasResponder<Responder<Route> >
 {
 public:
-	Route(Molecule *mol, Cluster<MetadataGroup> *cluster, int dims);
+	Route(Instance *inst, Cluster<MetadataGroup> *cluster, int dims);
 	~Route();
 
 	virtual void setup();
 	
-	/* typically referring to torsion angle values in order of cluster's
+	/* typically referring to parameter angle values in order of cluster's
 	 * torsion angle headers */
 	typedef std::vector<float> Point;
 
@@ -61,14 +63,14 @@ public:
 	/* get rid of all points defined so far */
 	void clearPoints();
 	
-	void setDestinationMolecule(Molecule *mol)
+	void setDestinationInstance(Instance *inst)
 	{
-		_endMolecule = mol;
+		_endInstance = inst;
 	}
 	
-	Molecule *endMolecule()
+	Instance *endInstance()
 	{
-		return _endMolecule;
+		return _endInstance;
 	}
 
 	/* to be called on separate thread */
@@ -185,19 +187,26 @@ public:
 		_wayPoints[idx] = wps;
 	}
 	
-	size_t torsionCount()
+	size_t parameterCount() const
 	{
-		return _torsions.size();
+		return _parameters.size();
 	}
 	
-	BondTorsion *torsion(int i)
+	Parameter *parameter(int i)
 	{
-		return _torsions[i];
+		return _parameters[i].param;
 	}
 	
-	void addTorsion(BondTorsion *t)
+	std::vector<ResidueTorsion> residueTorsions() const;
+
+	const ResidueTorsion &residueTorsion(int i) const
 	{
-		_torsions.push_back(t);
+		return _parameters[i].rt;
+	}
+	
+	void addParameter(const ResidueTorsion &rt, Parameter *p)
+	{
+		_parameters.push_back(ResidueTorsionParameter{p, rt});
 	}
 	
 	const std::vector<bool> &flips() const
@@ -217,11 +226,6 @@ public:
 protected:
 	const Grapher &grapher() const;
 	bool incrementGrapher();
-	
-	void clearMask()
-	{
-		_mask = std::vector<bool>(_torsions.size(), true);
-	}
 
 	virtual void customModifications(BondCalculator *calc, bool has_mol);
 
@@ -241,11 +245,6 @@ protected:
 	{
 		_ticket2Point.clear();
 		_point2Score.clear();
-	}
-	
-	bool usingTorsion(int i)
-	{
-		return _mask[i];
 	}
 	
 	size_t destinationSize()
@@ -292,12 +291,12 @@ protected:
 	}
 
 	std::atomic<bool> _finish{false};
-	std::vector<bool> _mask;
 	std::vector<Point> _points;
 
 	void populateWaypoints();
 	void prepareDestination();
-	void recalculateDestination();
+	void getParametersFromBasis();
+	void connectParametersToDestination();
 
 	bool incrementToAtomGraph(AtomGraph *ag);
 	AtomGraph *grapherForTorsionIndex(int idx);
@@ -317,21 +316,28 @@ private:
 	};
 	
 	void addToAtomPosMap(AtomPosMap &map, Result *r);
+	void reportFound();
 	void calculateAtomDeviations(Score &score);
+	
+	struct ResidueTorsionParameter
+	{
+		Parameter *param;
+		ResidueTorsion rt;
+	};
 
-	std::vector<BondTorsion *> _torsions;
+	std::vector<ResidueTorsionParameter> _parameters;
+	std::vector<Parameter *> _missing;
 
 	typedef std::map<int, int> TicketPoint;
 	typedef std::map<int, Score> TicketScores;
 	
 	size_t _grapherIdx = 0;
 
-	Molecule *_endMolecule = nullptr;
+	Instance *_endInstance = nullptr;
 
 	Point _destination;
 	std::vector<Angular> _rawDest;
 	
-	std::map<BondCalculator *, int > _calc2Dims;
 	std::map<BondCalculator *, std::vector<int> > _calc2Destination;
 
 	TicketPoint _ticket2Point;
@@ -339,7 +345,7 @@ private:
 	
 	InterpolationType _type = Polynomial;
 	
-	/* int: referring to torsion angle via _destination[int] */
+	/* int: referring to parameter angle via _destination[int] */
 	std::map<int, WayPoints> _wayPoints;
 	std::vector<bool> _flips;
 };

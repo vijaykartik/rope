@@ -22,20 +22,21 @@
 Engine::Engine(RunsEngine *ref)
 {
 	_ref = ref;
-	_n = ref->parameterCount();
+	_ref->resetTickets();
+	_n = _ref->parameterCount();
 }
 
 void Engine::currentScore()
 {
-	if (_current.size() == 0)
+	if (_bestResult.size() == 0)
 	{
-		_current = std::vector<float>(_n, 0);
+		_bestResult = std::vector<float>(_n, 0);
 	}
 
 	clearResults();
-	sendJob(_current);
+	sendJob(_bestResult);
 	getResults();
-	findBestResult(&_best);
+	findBestResult(&_currentScore);
 	clearResults();
 }
 
@@ -73,19 +74,32 @@ void Engine::getResults()
 	do
 	{
 		float score = _ref->getResult(&job_id);
+		
+		if (job_id < 0)
+		{
+			return;
+		}
+		
 		_scores[job_id].score = score;
 		_scores[job_id].received = true;
+		
+		if (score < _bestScore)
+		{
+			_bestScore = score;
+			_bestResult = _scores[job_id].vals;
+		}
 	}
-	while (job_id >= 0);
+	while (true);
 }
 
-void Engine::sendJob(std::vector<float> &all)
+int Engine::sendJob(const std::vector<float> &all)
 {
 	int ticket = _ref->sendJob(all);
-	TicketScore ts;
+	TicketScore ts{};
 	ts.vals = all;
 
 	_scores[ticket] = ts;
+	return ticket;
 }
 
 std::vector<float> Engine::difference_from(std::vector<float> &other)
@@ -111,4 +125,28 @@ void Engine::add_to(std::vector<float> &other, const std::vector<float> &add)
 void Engine::add_current_to(std::vector<float> &other)
 {
 	add_to(other, _current);
+}
+
+void Engine::start()
+{
+	_n = _ref->parameterCount();
+	_current.clear();
+	_bestResult.clear();
+	_bestScore = FLT_MAX;
+
+	if (n() == 0)
+	{
+		std::cout << "No parameters" << std::endl;
+		return;
+	}
+
+	currentScore();
+	_startScore = _currentScore;
+	
+	run();
+	
+	currentScore();
+	_endScore = _currentScore;
+	
+	_improved = (_endScore < _startScore - 1e-6);
 }

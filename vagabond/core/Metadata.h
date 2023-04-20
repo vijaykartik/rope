@@ -26,7 +26,7 @@
 #include "Ruler.h"
 #include "Progressor.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 class Metadata : public Progressor
@@ -34,6 +34,8 @@ class Metadata : public Progressor
 public:
 	Metadata();
 	~Metadata();
+	
+	bool isMaster();
 	
 	void setSource(std::string source)
 	{
@@ -68,9 +70,9 @@ public:
 		return nullptr;
 	}
 
-	const KeyValues *valuesForMolecule(const std::string name);
+	const KeyValues *valuesForInstance(const std::string name);
 	
-	void setModelIdForMoleculeId(std::string, std::string);
+	void setModelIdForInstanceId(std::string, std::string);
 
 	const KeyValues *valuesForFilename(const std::string name)
 	{
@@ -99,7 +101,7 @@ public:
 
 	const size_t entryCount() const
 	{
-		return _mole2Data.size() + _model2Data.size() + _file2Data.size();
+		return _inst2Data.size() + _model2Data.size() + _file2Data.size();
 	}
 
 	Ruler &ruler()
@@ -122,9 +124,9 @@ private:
 	std::list<KeyValues> _data;
 	
 	std::set<std::string> _headers;
-	std::map<std::string, std::string> _mol2Model;
+	std::map<std::string, std::string> _inst2Model;
 
-	std::map<std::string, KeyValues *> _mole2Data;
+	std::map<std::string, KeyValues *> _inst2Data;
 	std::map<std::string, KeyValues *> _model2Data;
 	std::map<std::string, KeyValues *> _file2Data;
 };

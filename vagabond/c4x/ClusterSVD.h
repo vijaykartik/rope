@@ -21,6 +21,7 @@
 
 #include <mutex>
 #include "Cluster.h"
+#include <mutex>
 
 template <class DG>
 class ClusterSVD : public Cluster<DG>

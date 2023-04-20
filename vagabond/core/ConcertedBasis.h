@@ -23,7 +23,7 @@
 #include "TorsionBasis.h"
 #include "../utils/svd/PCA.h"
 
-class Molecule;
+class Instance;
 class Residue;
 
 class ConcertedBasis : public TorsionBasis
@@ -32,7 +32,7 @@ public:
 	ConcertedBasis();
 	~ConcertedBasis();
 
-	virtual float torsionForVector(int idx, const float *vec, int n);
+	virtual float parameterForVector(int idx, const float *vec, int n);
 	virtual void prepare(int dims = 0);
 
 	/** only the torsions available in the mask will be used for calculating
@@ -46,20 +46,20 @@ public:
 		_custom = custom;
 	}
 	
-	bool fillFromMoleculeList(Molecule *molecule, int axis,
+	bool fillFromInstanceList(Instance *instance, int axis,
 	                          const std::vector<ResidueTorsion> &list,
 	                          const std::vector<Angular> &values);
 
-	bool reverseLookup(Molecule *mol, int axis,
+	bool reverseLookup(Instance *inst, int axis,
 	                   const std::vector<ResidueTorsion> &list,
 	                   const std::vector<Angular> &values);
 
-	const std::vector<BondTorsion *> &missingBonds() const
+	const std::vector<Parameter *> &missingBonds() const
 	{
 		return _missing;
 	}
 	
-	Residue *unusedTorsion()
+	const Residue *unusedTorsion()
 	{
 		return _unusedId;
 	}
@@ -68,8 +68,8 @@ private:
 	void setupAngleList();
 	std::vector<bool> _refineMask;
 
-	std::vector<BondTorsion *> _missing;
-	Residue *_unusedId{};
+	std::vector<Parameter *> _missing;
+	const Residue *_unusedId{};
 
 	bool _custom = false;
 	
@@ -79,7 +79,7 @@ private:
 	size_t _nActive;
 	int _dims;
 
-	std::vector<BondTorsion *> _filtered;
+	std::vector<Parameter *> _filtered;
 	PCA::SVD _svd{};
 };
 

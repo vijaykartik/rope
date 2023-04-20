@@ -20,23 +20,24 @@
 #include <math.h>
 #include <vagabond/utils/version.h>
 #include <vagabond/core/RopeCluster.h>
-#include <vagabond/core/Molecule.h>
+#include <vagabond/core/ChemotaxisEngine.h>
+#include <vagabond/core/Instance.h>
 #include <vagabond/utils/FileReader.h>
 #include <vagabond/gui/elements/Menu.h>
-#include "PlaneView.h"
 #include "AxisExplorer.h"
+#include "ConfSpaceView.h"
 #include "PlausibleRoute.h"
 #include "SplitRoute.h"
 #include "RouteExplorer.h"
 #include "Axes.h"
 
-Axes::Axes(TorsionCluster *group, Molecule *m) : IndexResponder()
+Axes::Axes(TorsionCluster *group, Instance *m) : IndexResponder()
 {
 	initialise();
 
 	_cluster = group;
 	_torsionCluster = group;
-	_molecule = m;
+	_instance = m;
 	
 	prepareAxes();
 
@@ -45,13 +46,13 @@ Axes::Axes(TorsionCluster *group, Molecule *m) : IndexResponder()
 #endif
 }
 
-Axes::Axes(PositionalCluster *group, Molecule *m) : IndexResponder()
+Axes::Axes(PositionalCluster *group, Instance *m) : IndexResponder()
 {
 	initialise();
 
 	_cluster = group;
 	_positionalCluster = group;
-	_molecule = m;
+	_instance = m;
 	
 	prepareAxes();
 
@@ -60,12 +61,12 @@ Axes::Axes(PositionalCluster *group, Molecule *m) : IndexResponder()
 #endif
 }
 
-Axes::Axes(RopeCluster *group, Molecule *m) : IndexResponder()
+Axes::Axes(RopeCluster *group, Instance *m) : IndexResponder()
 {
 	initialise();
 
 	_cluster = group;
-	_molecule = m;
+	_instance = m;
 	
 	prepareAxes();
 
@@ -95,9 +96,20 @@ void Axes::initialise()
 	}
 }
 
+void Axes::stop()
+{
+	if (_worker != nullptr)
+	{
+		_worker->join();
+		delete _worker;
+		_worker = nullptr;
+	}
+
+}
+
 Axes::~Axes()
 {
-	delete _pv;
+	stop();
 }
 
 bool Axes::mouseOver()
@@ -137,7 +149,7 @@ std::vector<Angular> Axes::directTorsionVector(int idx)
 
 	if (_targets[idx] != nullptr)
 	{
-		int mine = _torsionCluster->dataGroup()->indexOfObject(_molecule);
+		int mine = _torsionCluster->dataGroup()->indexOfObject(_instance);
 		int yours = _torsionCluster->dataGroup()->indexOfObject(_targets[idx]);
 
 		std::vector<Angular> vals = _torsionCluster->rawVector(mine, yours);
@@ -189,7 +201,7 @@ void Axes::loadAxisExplorer(int idx)
 		return;
 	}
 	
-	std::string str = "Reference " + _molecule->id();
+	std::string str = "Reference " + _instance->id();
 	std::string info;
 	
 	if (_targets[idx] != nullptr)
@@ -204,7 +216,7 @@ void Axes::loadAxisExplorer(int idx)
 
 	try
 	{
-		AxisExplorer *ae = new AxisExplorer(_scene, _molecule, list, vals);
+		AxisExplorer *ae = new AxisExplorer(_scene, _instance, list, vals);
 		ae->setCluster(_torsionCluster);
 		ae->setFutureTitle(str);
 		ae->show();
@@ -219,11 +231,11 @@ void Axes::loadAxisExplorer(int idx)
 void Axes::route(int idx)
 {
 	int l = _torsionCluster->dataGroup()->length();
-	SplitRoute *sr = new SplitRoute(_molecule, _torsionCluster, l);
+	SplitRoute *sr = new SplitRoute(_instance, _torsionCluster, l);
 	
 	std::vector<Angular> values = directTorsionVector(idx);
 	sr->setRawDestination(values);
-	sr->setDestinationMolecule(_targets[idx]);
+	sr->setDestinationInstance(_targets[idx]);
 
 	RouteExplorer *re = new RouteExplorer(_scene, sr);
 	re->show();
@@ -240,6 +252,10 @@ void Axes::buttonPressed(std::string tag, Button *button)
 	{
 		_scene->buttonPressed("choose_reorient_molecule", nullptr);
 	}
+	else if (tag == "match_colour")
+	{
+		_scene->buttonPressed(tag, nullptr);
+	}
 	else if (tag == "reflect")
 	{
 		reflect(_lastIdx);
@@ -252,30 +268,10 @@ void Axes::buttonPressed(std::string tag, Button *button)
 	{
 		route(_lastIdx);
 	}
-	else if (tag == "cancel_plane")
-	{
-		cancelPlane();
-	}
-	else if (tag == "start_plane")
-	{
-		setAxisInPlane(_lastIdx, true);
-	} 
-	else if (tag == "make_plane")
-	{
-		setAxisInPlane(_lastIdx, true);
-		preparePlane();
-	}
 }
 
 void Axes::takeOldAxes(Axes *old)
 {
-	PlaneView *pv = old->planeView();
-
-	for (size_t i = 0; i < 3 && pv != nullptr; i++)
-	{
-		_planes[i] = pv->planes()[i];
-	}
-	
 	for (size_t i = 0; i < 3; i++)
 	{
 		_dirs[i] = old->_dirs[i];
@@ -283,101 +279,11 @@ void Axes::takeOldAxes(Axes *old)
 	}
 	
 	refreshAxes();
-	
-	if (pv != nullptr)
-	{
-		preparePlane();
-	}
-}
-
-void Axes::preparePlane()
-{
-	/*
-	std::cout << "preparing plane" << std::endl;
-
-	delete _pv; _pv = nullptr;
-	_pv = new PlaneView(_cluster, _molecule);
-	
-	Plane *plane = _pv->plane();
-	
-	for (size_t i = 0; i < 3; i++)
-	{
-		if (!_planes[i])
-		{
-			continue;
-		}
-
-		std::vector<float> mapped = getMappedVector(i);
-		
-		std::vector<ResidueTorsion> list;
-		list = _cluster->dataGroup()->headers();
-		std::vector<Angular> vals = getTorsionVector(i);
-
-		plane->addAxis(list, vals, mapped);
-	}
-	
-	plane->setResponder(_pv);
-	plane->refresh();
-	_pv->setPlanes(_planes);
-	_pv->populate();
-	addObject(_pv);
-	*/
-}
-
-void Axes::cancelPlane()
-{
-	for (size_t i = 0; i < 3; i++)
-	{
-		setAxisInPlane(i, false);
-	}
-
-	if (_pv != nullptr)
-	{
-		removeObject(_pv);
-		delete _pv;
-		_pv = nullptr;
-	}
-	
-	refreshAxes();
-}
-
-void Axes::setAxisInPlane(int idx, bool plane)
-{
-	_planes[idx] = plane;
-	refreshAxes();
-}
-
-bool Axes::startedPlane()
-{
-	for (size_t i = 0; i < 3; i++)
-	{
-		if (_planes[i])
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool Axes::finishedPlane()
-{
-	int count = 0;
-
-	for (size_t i = 0; i < 3; i++)
-	{
-		if (_planes[i])
-		{
-			count++;
-		}
-	}
-
-	return (count >= 2);
 }
 
 void Axes::interacted(int idx, bool hover, bool left)
 {
-	if (!hover && _molecule && _cluster)
+	if (!hover && _instance && _cluster)
 	{
 		_lastIdx = idx;
 
@@ -385,6 +291,11 @@ void Axes::interacted(int idx, bool hover, bool left)
 		m->addOption("explore axis", "explore_axis");
 		m->addOption("reorient", "reorient");
 		m->addOption("reflect", "reflect");
+		
+		if (_scene->colourRule() != nullptr)
+		{
+			m->addOption("match colour", "match_colour");
+		}
 		
 		if (_targets[idx] != nullptr)
 		{
@@ -394,26 +305,6 @@ void Axes::interacted(int idx, bool hover, bool left)
 #endif
 		}
 		
-#ifdef VERSION_NEXT
-		if (!startedPlane())
-		{
-			m->addOption("start plane", "start_plane");
-		}
-		else if (!finishedPlane() && !_planes[_lastIdx])
-		{
-			m->addOption("make plane", "make_plane");
-		}
-		else if (!finishedPlane())
-		{
-			m->addOption("cancel plane", "cancel_plane");
-		}
-		else if (finishedPlane())
-		{
-			m->addOption("cancel plane", "cancel_plane");
-			m->addOption("plane options", "plane_options");
-		}
-#endif
-
 		double w = _scene->width();
 		double h = _scene->height();
 		int lx = -1; int ly = -1;
@@ -446,7 +337,7 @@ size_t Axes::requestedIndices()
 void Axes::refreshAxes()
 {
 	ObjectGroup *group = _cluster->objectGroup();
-	int idx = group->indexOfObject(_molecule);
+	int idx = group->indexOfObject(_instance);
 	glm::vec3 start = glm::vec3(0.f);
 	
 	if (idx >= 0)
@@ -472,17 +363,17 @@ void Axes::refreshAxes()
 		}
 	}
 
-	rebufferVertexData();
+	forceRender(true, false);
 }
 
 void Axes::prepareAxes()
 {
 	glm::vec3 centre = glm::vec3(0.f);
 	
-	if (_cluster && _molecule)
+	if (_cluster && _instance)
 	{
 		ObjectGroup *group = _cluster->objectGroup();
-		int idx = group->indexOfObject(_molecule);
+		int idx = group->indexOfObject(_instance);
 		centre = _cluster->pointForDisplay(idx);
 	}
 
@@ -501,7 +392,7 @@ void Axes::reflect(int i)
 	refreshAxes();
 }
 
-void Axes::reorient(int i, Molecule *mol)
+void Axes::reorient(int i, Instance *mol)
 {
 	if (i >= 0 && i <= 2)
 	{
@@ -521,7 +412,7 @@ void Axes::reorient(int i, Molecule *mol)
 	}
 
 	ObjectGroup *group = _cluster->objectGroup();
-	int idx = group->indexOfObject(_molecule);
+	int idx = group->indexOfObject(_instance);
 	glm::vec3 centre = _cluster->point(idx);
 
 	for (size_t i = 0; i < 3; i++)
@@ -543,3 +434,63 @@ void Axes::reorient(int i, Molecule *mol)
 	
 	refreshAxes();
 }
+
+void Axes::backgroundPrioritise(std::string key)
+{
+	stop();
+	_worker = new std::thread(&Axes::prioritiseDirection, this, key);
+}
+
+size_t Axes::parameterCount()
+{
+	return 3;
+}
+
+int Axes::sendJob(const std::vector<float> &all)
+{
+	std::vector<float> vals = _cluster->objectGroup()->numbersForKey(_key);
+	CorrelData cd = empty_CD();
+	glm::vec3 dir = glm::normalize(glm::vec3(all[0], all[1], all[2]));
+
+	for (int idx = 0; idx < _cluster->objectGroup()->objectCount(); idx++)
+	{
+		glm::vec3 centre = _cluster->point(idx);
+		float pos = glm::dot(dir, centre);
+		
+		add_to_CD(&cd, vals[idx], pos);
+	}
+	
+	int ticket = getNextTicket();
+	float score = evaluate_CD(cd);
+
+	_dirs[_lastIdx] = dir;
+	
+	if (score != score)
+	{
+		score = FLT_MAX;
+	}
+
+	refreshAxes();
+
+	setScoreForTicket(ticket, score);
+	return ticket;
+}
+
+void Axes::prioritiseDirection(std::string key)
+{
+	std::cout << "Prioritising direction against " << key << std::endl;
+	_key = key;
+	if (_engine != nullptr)
+	{
+		delete _engine;
+		_engine = nullptr;
+	}
+	_engine = new ChemotaxisEngine(this);
+	_engine->start();
+	
+	_key = "";
+	std::string score = std::to_string(_engine->bestScore());
+
+	_scene->setInformation("Correlation with colour: " + score);
+}
+

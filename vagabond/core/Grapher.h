@@ -23,9 +23,14 @@
 #include "AnchorExtension.h"
 #include "AtomBlock.h"
 #include <vagabond/utils/svd/PCA.h>
+#include <deque>
 
+class BondSequence;
 class TorsionBasis;
+class Parameter;
 class BondCalculator;
+class RingProgrammer;
+class RingProgram;
 
 /** \class Grapher
  * Constructs graphs from starting atoms tracing through the structure
@@ -40,6 +45,8 @@ public:
 
 	Grapher();
 	Grapher(Grapher &g);
+	
+	void setupProgrammers();
 
 	/** generation of atom graph.
 	 * @param atom anchor point to start from
@@ -53,15 +60,17 @@ public:
 	void markHydrogenGraphs();
 	void sortGraphChildren();
 	
+	bool beyondVisitLimit(Atom *atom);
+	
 	PCA::Matrix distanceMatrix();
 	void fillDistances(PCA::Matrix &m);
 
-	std::vector<AtomBlock> turnToBlocks();
+	std::vector<AtomBlock> turnToBlocks(TorsionBasis *basis);
 	void fillMissingWriteLocations(std::vector<AtomBlock> &blocks);
 	
-	void setSingleChain(bool singleChain)
+	void setInSequence(bool inSequence)
 	{
-		_singleChain = singleChain;
+		_inSequence = inSequence;
 	}
 	
 	/** returns number of nodes */
@@ -84,13 +93,13 @@ public:
 	}
 	
 	/** returns reference to node index */
-	AtomGraph *graph(BondTorsion *t) const
+	AtomGraph *graph(Parameter *t) const
 	{
-		if (_torsion2Graph.count(t) == 0)
+		if (_parameter2Graph.count(t) == 0)
 		{
 			return nullptr;
 		}
-		return _torsion2Graph.at(t);
+		return _parameter2Graph.at(t);
 	}
 	
 	/** returns reference to node index */
@@ -112,8 +121,33 @@ public:
 		return _atoms;
 	}
 	
+	const int programCount() const
+	{
+		return _programs.size();
+	}
+	
+	const std::vector<RingProgram *> &programs() const
+	{
+		return _programs;
+	}
+	
+	void setVisitLimit(int limit)
+	{
+		_visitLimit = limit;
+	}
+	
+	void setJointLimit(int limit)
+	{
+		_jointLimit = limit;
+	}
+	
+	const int &observedVisitLimit() const
+	{
+		return _observedVisitLimit;
+	}
+	
 	std::string desc() const;
-
+	
 	/** get the first graph of the next residue following along the nodes.
 	 * If there is a choice, take the one with the lower residue number.
 	 * @param last current node 
@@ -122,28 +156,57 @@ public:
 
 	/** find the child with the biggest maximum depth */
 	AtomGraph *deepestChild(AtomGraph *last) const;
+	
+	std::vector<const AtomGraph *> joints() const;
+	const std::vector<AtomGraph *> &graphs() const
+	{
+		return _graphs;
+	}
+
+	void passTorsionsToSisters(BondSequence *sequence) const;
 private:
 	void addGraph(AtomGraph *graph);
+	int jumpsToAtom(AtomGraph *last, Atom *search, int max);
+	void passTorsionsToSisters(const std::vector<AtomBlock> &blocks,
+	                           int idx) const;
 	void extendGraphNormally(AtomGraph *current,
 	                         std::vector<AtomGraph *> &todo,
 	                         AnchorExtension &ext);
 	void fixBlockAsGhost(AtomBlock &block, Atom *anchor);
-	void assignAtomToBlock(AtomBlock &block, int idx, Atom *atom);
+	void assignAtomToBlock(AtomBlock &block, AtomGraph *gr);
 	bool preferredConnection(Atom *atom, Atom *next);
+	void sendAtomToProgrammers(AtomGraph *ag, int idx, 
+	                           std::vector<AtomBlock> &blocks, 
+	                           TorsionBasis *basis);
 
 	std::vector<AtomGraph *> _graphs;
 	std::vector<Atom *> _atoms;
 	std::map<Atom *, AtomBlock> _atom2Transform;
 	std::vector<Atom *> _anchors;
 	std::map<Atom *, AtomGraph *> _atom2Graph;
-	std::map<BondTorsion *, AtomGraph *> _torsion2Graph;
+	std::map<int, AtomGraph *> _block2Graph;
+	std::map<Parameter *, AtomGraph *> _parameter2Graph;
+	
+	std::map<Atom *, int> _visits;
+	int _visitLimit = 1;
+	int _observedVisitLimit = 0;
+	int _ringSizeLimit = 6;
+	int _jointLimit = -1;
+	int _joints = 0;
+	
+	typedef std::deque<RingProgrammer> RingProgrammers;
+
+	std::vector<RingProgrammer> _programmers; // copy of each type of prog
+	std::map<int, RingProgrammers> _workingProggers; // actual programmers at work
+
+	std::vector<RingProgram *> _programs;
 
 	int _graphsDone = 0;
 	int _anchorsDone = 0;
 	int _atomsDone = 0;
 	
 	bool _original = true;
-	bool _singleChain = false; 
+	bool _inSequence = false; 
 };
 
 #endif

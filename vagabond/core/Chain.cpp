@@ -43,6 +43,11 @@ void Chain::add(Atom *a)
 			addBondstraint(a->bondAngle(j));
 		}
 
+		for (size_t j = 0; j < a->hyperValueCount(); j++)
+		{
+			addBondstraint(a->hyperValue(j));
+		}
+
 		for (size_t j = 0; j < a->bondTorsionCount(); j++)
 		{
 			BondTorsion *b = a->bondTorsion(j);
@@ -62,7 +67,7 @@ Sequence *Chain::fullSequence()
 	}
 
 	std::map<int, Sequence *> sequences;
-	std::vector<AtomGroup *> grps = connectedGroups();
+	std::vector<AtomGroup *> grps = connectedGroups(true);
 
 	for (size_t i = 0; i < grps.size(); i++)
 	{
@@ -146,11 +151,10 @@ void Chain::assignMainChain()
 			continue;
 		}
 
-		Atom *start = grps[i]->chosenAnchor();
+		Atom *start = grps[i]->sequenceAnchor();
 		Grapher gr;
 		AnchorExtension ext(start, UINT_MAX);
 		gr.generateGraphs(ext);
-//		gr.assignMainChain();
 	}
 	
 	int count = 0;

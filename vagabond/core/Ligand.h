@@ -33,24 +33,41 @@ public:
 	Ligand();
 	Ligand(std::string model_id, AtomGroup *grp);
 
-	const std::string &substance_id() const
+	virtual std::string desc() const;
+	virtual const std::string id() const;
+
+	virtual bool hasSequence() const
 	{
-		return _substance_id;
+		return false;
 	}
 
-	virtual std::string desc() const;
-	
-	Substance *const substance();
-protected:
 	virtual bool atomBelongsToInstance(Atom *a);
+protected:
+	friend void to_json(json &j, const Ligand &value);
+	friend void from_json(const json &j, Ligand &value);
+
 private:
 	std::string _anchorDesc;
-	std::string _nickname;
+	std::string _code;
 	std::string _chain;
 	std::set<ResidueId> _resids;
-
-	std::string _substance_id;
-	Substance *_substance = nullptr;
 };
+
+inline void to_json(json &j, const Ligand &value)
+{
+	j["chain"] = value._chain;
+	j["residue_ids"] = value._resids;
+	j["anchor_desc"] = value._anchorDesc;
+	j["code"] = value._code;
+}
+
+inline void from_json(const json &j, Ligand &value)
+{
+	value._chain = j.at("chain");
+	std::set<ResidueId> resids = j.at("residue_ids");
+	value._resids = resids;
+	value._anchorDesc = j.at("anchor_desc");
+	value._code = j.at("code");
+}
 
 #endif

@@ -105,7 +105,7 @@ Sequence &Sequence::operator+=(Residue &res)
 void Sequence::findSequence()
 {
 	Grapher gr;
-	gr.setSingleChain(true);
+	gr.setInSequence(true);
 	AnchorExtension ext(_anchor, UINT_MAX);
 	gr.generateGraphs(ext);
 
@@ -243,9 +243,9 @@ void Sequence::addBufferResidue()
 	_master.push_back(res);
 }
 
-Residue *const Sequence::local_residue(Residue *master) const
+Residue *const Sequence::local_residue(Residue *const master) const
 {
-	if (_map2Local.count(master) == 0)
+	if (!master || _map2Local.count(master) == 0)
 	{
 		return nullptr;
 	}
@@ -253,7 +253,7 @@ Residue *const Sequence::local_residue(Residue *master) const
 	return _map2Local.at(master);
 }
 
-Residue *Sequence::master_residue(Residue *local) const
+Residue *Sequence::master_residue(Residue *const local) const
 {
 	if (_map2Master.count(local) == 0)
 	{
@@ -349,9 +349,10 @@ void Sequence::addResidueTorsions(std::vector<ResidueTorsion> &headers)
 		for (const TorsionRef &torsion : residue.torsions())
 		{
 			ResidueTorsion rt{};
-			rt.torsion = torsion;
-			rt.residue = &residue;
-			rt.entity = _entity;
+			rt.setTorsion(torsion);
+			rt.setMaster(&residue);
+			rt.setEntity(_entity);
+			rt.housekeeping();
 			headers.push_back(rt);
 		}
 	}
@@ -373,6 +374,7 @@ bool Sequence::torsionByName(const std::string name, Residue **res)
 	return true;
 }
 
+/* called on the master sequence */
 void Sequence::torsionsFromMapped(Sequence *seq, std::vector<Angular> &vals,
                                   rope::TorsionType type)
 {
@@ -407,12 +409,9 @@ void Sequence::torsionsFromMapped(Sequence *seq, std::vector<Angular> &vals,
 					f = match.refinedAngle();
 					break;
 				}
-
-				if (!match.coversMainChain())
-				{
-					f = NAN;
-				}
 			}
+			
+			f.hyper = (match.isHyperParameter());
 
 			vals.push_back(f);
 		}
@@ -424,4 +423,41 @@ AtomGroup *Sequence::convertToAtoms()
 	AtomsFromSequence afs(*this);
 	AtomGroup *grp = afs.atoms();
 	return grp;
+}
+
+Sequence Sequence::fragment(ResidueId central, int buffer)
+{
+	Residue *centre = residueLike(central);
+	std::list<Residue>::iterator start = iterator(*centre);
+	std::list<Residue>::iterator finish = start;
+	finish++;
+	
+	if (start == residues().end() || finish == residues().end())
+	{
+		return nullptr;
+	}
+	
+	for (size_t i = 0; i < buffer; i++)
+	{
+		start--;
+		finish++;
+		if (start == residues().begin() ||
+		    finish == residues().end())
+		{
+			return nullptr;
+		}
+		
+		if (start->nothing() || finish->nothing())
+		{
+			return nullptr;
+		}
+	}
+	
+	Sequence fragment;
+	for (std::list<Residue>::iterator it = start; it != finish; it++)
+	{
+		fragment += *it;
+	}
+
+	return fragment;
 }

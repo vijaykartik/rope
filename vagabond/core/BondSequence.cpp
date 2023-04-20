@@ -74,6 +74,9 @@ void BondSequence::makeTorsionBasis()
 
 void BondSequence::addToGraph(AnchorExtension &ext)
 {
+	_grapher.setVisitLimit(_loopCount);
+	_grapher.setInSequence(_inSequence);
+	_grapher.setJointLimit(_jointLimit);
 	_grapher.generateGraphs(ext);
 	_grapher.calculateMissingMaxDepths();
 	_grapher.fillInParents();
@@ -93,12 +96,18 @@ void BondSequence::addToGraph(AnchorExtension &ext)
 
 void BondSequence::generateBlocks()
 {
-	std::vector<AtomBlock> incoming = _grapher.turnToBlocks();
+	std::vector<AtomBlock> incoming = _grapher.turnToBlocks(_torsionBasis);
 	_grapher.fillMissingWriteLocations(incoming);
 
 	_blocks.reserve(_blocks.size() + incoming.size());
 	_blocks.insert(_blocks.end(), incoming.begin(), incoming.end());
 	_singleSequence = _blocks.size();
+	
+	for (size_t i = 0; i < _grapher.programCount(); i++)
+	{
+		_programs.push_back(*_grapher.programs()[i]);
+		_programs.back().makeLinkToAtom();
+	}
 }
 
 std::map<std::string, int> BondSequence::elementList() const
@@ -132,7 +141,7 @@ void BondSequence::prepareTorsionBasis()
 		{
 			dimensions = _sampler->dims();
 		}
-		_torsionBasis->prepare(dimensions + 1);
+//		_torsionBasis->prepare(dimensions + 1);
 	}
 }
 
@@ -251,63 +260,38 @@ void BondSequence::fetchTorsion(int idx)
 	
 	int n = (_custom ? _custom->size : 0);
 
-	double t = _torsionBasis->torsionForVector(_blocks[idx].torsion_idx,
-	                                           _currentVec, n);
+	double t = _torsionBasis->parameterForVector(_blocks[idx].torsion_idx,
+	                                             _currentVec, n);
 
 	_blocks[idx].torsion = t;
 }
 
 int BondSequence::calculateBlock(int idx)
 {
+	AtomBlock &b = _blocks[idx];
+
+	if (b.silenced && _usingPrograms)
+	{
+		// this is part of a ring program.
+		return 0;
+	}
+
 	fetchTorsion(idx);
-	float t = deg2rad(_blocks[idx].torsion);
-	glm::mat4x4 &coord = _blocks[idx].coordination;
-	glm::mat4x4 &basis = _blocks[idx].basis;
-	glm::mat4x4 &wip = _blocks[idx].wip;
-	glm::vec3 &inherit = _blocks[idx].inherit;
-
-	float sint = sin(t);
-	float cost = cos(t);
-	_torsion_rot[0][0] = cost;
-	_torsion_rot[1][0] = -sint;
-	_torsion_rot[0][1] = sint;
-	_torsion_rot[1][1] = cost;
-
-	wip = basis * _torsion_rot * coord;
-
-	if (_blocks[idx].atom == nullptr) // is anchor
-	{
-		int nidx = idx + _blocks[idx].write_locs[0];
-		Atom *anchor = _blocks[nidx].atom;
-
-		/* _blocks[idx].basis assigned originally by Grapher */
-		_blocks[nidx].basis = _blocks[idx].basis;
-		glm::mat4x4 wip = _blocks[nidx].basis * _blocks[nidx].coordination;
-
-		int nb = _blocks[idx].nBonds;
-		_blocks[nidx].inherit = (wip[0]);
-		if (_blocks[idx].nBonds == 1)
-		{
-			_blocks[nidx].inherit = (wip[1]);
-		}
-			
-		return 1;
-	}
 	
-	// write locations!
-	for (size_t i = 0; i < _blocks[idx].nBonds; i++)
-	{
-		if (_blocks[idx].write_locs[i] < 0)
-		{
-			continue;
-		}
+	glm::mat4x4 rot = b.prepareRotation();
 
-		int n = idx + _blocks[idx].write_locs[i];
-		torsion_basis(_blocks[n].basis, basis[3], inherit, wip[i]);
-		_blocks[n].inherit = glm::vec3(basis[3]);
+	b.wip = b.basis * rot * b.coordination;
+
+	b.writeToChildren(_blocks, idx, _usingPrograms);
+
+	int &progidx = b.program;
+	if (progidx >= 0 && _usingPrograms)
+	{
+		int n = (_custom ? _custom->size : 0);
+		_programs[progidx].run(_blocks, idx, _currentVec, n);
 	}
-	
-	return 0;
+
+	return (b.atom == nullptr);
 }
 
 void BondSequence::checkCustomVectorSizeFits()
@@ -413,11 +397,23 @@ void BondSequence::superpose()
 
 			glm::vec3 p = _blocks[n].target;
 			glm::vec3 q = _blocks[n].my_position();
-			pose.addPositionPair(p, q);
+			
+			if (p.x == p.x)
+			{
+				pose.addPositionPair(p, q);
+			}
 		}
 
 		pose.superpose();
 		const glm::mat4x4 &trans = pose.transformation();
+
+		if (_usingPrograms)
+		{
+			for (RingProgram &program : _programs)
+			{
+				program.addTransformation(trans);
+			}
+		}
 
 		for (size_t j = 0; j < _singleSequence; j++)
 		{
@@ -444,10 +440,10 @@ void BondSequence::calculate()
 	
 	if (_torsionBasis != nullptr)
 	{
-		_torsionBasis->prepareRecalculation();
+//		_torsionBasis->prepareRecalculation();
 	}
 
-	if (_skipSections)
+	if (_skipSections && !_fullRecalc)
 	{
 		fastCalculate();
 		return;
@@ -472,6 +468,7 @@ void BondSequence::calculate()
 	_fullRecalc = false;
 	
 	superpose();
+
 	signal(SequencePositionsReady);
 }
 
@@ -508,11 +505,9 @@ double BondSequence::calculateDeviations()
 
 		glm::vec3 diff = trial_pos - target;
 		
-		if (_blocks[i].atom->atomName() == "CG1" && false)
+		if (diff.x != diff.x)
 		{
-			glm::vec3 &moving = _blocks[i].moving;
-			std::cout << glm::to_string(diff) << " " << glm::to_string(moving) << 
-			" " << frac << std::endl;
+			continue;
 		}
 		
 		sum += glm::length(diff) / weight;
@@ -620,19 +615,27 @@ void BondSequence::reflagDepth(int min, int max, int sidemax)
 	}
 
 	std::queue<AtomBlockTodo> todo;
-	AtomBlockTodo minBlock = {&_blocks[min], min, min};
+	
+	// wind back if before a program
+	/* midway through program */
+//	while ((_blocks[min].program != -1) && min > 0 && _usingPrograms) 
+	{
+//		min--;
+	}
 	
 	if (min >= _blocks.size())
 	{
 		return;
 	}
 	
-	if (minBlock.block->atom == nullptr)
+	if (_blocks[min].atom == nullptr)
 	{
 		min++;
-		minBlock = {&_blocks[min], min, min};
 	}
 
+	// first min tracks the current 'depth' accounting for branches
+	// second min = the index number
+	AtomBlockTodo minBlock = {&_blocks[min], min, min};
 	todo.push(minBlock);
 	_startCalc = min;
 	int last = min;
@@ -695,76 +698,18 @@ void BondSequence::reflagDepth(int min, int max, int sidemax)
 	}
 
 	_fullRecalc = true;
-	_torsionBasis->supplyMask(atomMask());
+	size_t progs;
+	_torsionBasis->supplyMask(activeParameterMask(&progs));
 }
 
-void BondSequence::reflagDepthOld(int min, int max, int sidemax)
+
+std::vector<bool> BondSequence::activeParameterMask(size_t *programs)
 {
-	bool found_first = false;
-	
-	_startCalc = 0;
-	_endCalc = INT_MAX;
-
-	for (size_t i = 0; i < _blocks.size(); i++)
-	{
-		AtomBlock &block = _blocks[i];
-
-		/* it's the beginning anchor atom, ignore */
-		if (block.atom == nullptr)
-		{
-			continue;
-		}
-
-		AtomGraph *graph = _atom2Graph[block.atom];
-		block.flag = (graph->depth >= min && graph->depth < max);
-		
-		bool inclusive = (graph->depth >= min - 1 && graph->depth <= max);
-		
-		if (inclusive && !found_first)
-		{
-			found_first = true;
-			_startCalc = i - 1;
-
-		}
-		if (inclusive)
-		{
-			_endCalc = i + 1;
-		}
-		
-		if (strcmp(block.element, "H") == 0 && _ignoreHydrogens)
-		{
-			block.flag = false;
-			continue;
-		}
-		
-		/* we always include the main chain no matter what sidemax is */
-		if (graph->priority == 0)
-		{
-			continue;
-		}
-		
-		int depth_to_go = graph->maxDepth - graph->depth;
-		
-		if (depth_to_go >= sidemax)
-		{
-			block.flag = false;
-		}
-	}
-	
-	if (_startCalc > 0 && _blocks[_startCalc - 1].atom == nullptr)
-	{
-		_startCalc--;
-	}
-
-	_fullRecalc = true;
-	_torsionBasis->supplyMask(atomMask());
-}
-
-std::vector<bool> BondSequence::atomMask()
-{
-	std::vector<bool> mask = std::vector<bool>(_torsionBasis->torsionCount(),
+	std::vector<bool> mask = std::vector<bool>(_torsionBasis->parameterCount(),
 	                                           false);
 	
+	std::vector<RingProgram *> activePrograms;
+
 	for (AtomBlock &block : _blocks)
 	{
 		if (!block.flag)
@@ -777,7 +722,23 @@ std::vector<bool> BondSequence::atomMask()
 		{
 			mask[idx] = true;
 		}
+		
+		if (block.program >= 0)
+		{
+			activePrograms.push_back(&_programs[block.program]);
+		}
 	}
+	
+	for (RingProgram *p : activePrograms)
+	{
+		for (size_t i = 0; i < p->parameterCount(); i++)
+		{
+			int idx = p->parameterIndex(i);
+			mask[idx] = true;
+		}
+	}
+	
+	*programs = activePrograms.size();
 	
 	return mask;
 }

@@ -27,6 +27,11 @@ class Atom;
 struct AtomBlock
 {
 	bool flag = true;
+	bool silenced = false;
+	
+	// program = idx when program should start, -1 when not in use,
+	// -2 when in the middle of program and -3 when program is done
+	int program = -1;
 	Atom *atom = nullptr;
 	char element[3] = "\0";
 	int nBonds;
@@ -71,24 +76,14 @@ struct AtomBlock
 	{
 		return glm::vec3(wip[i]);
 	}
+	
+	void silence();
+	void printBlock() const;
 
-	void printBlock()
-	{
-		std::cout << " ===== ATOM BLOCK =====" << std::endl;
-		if (atom != nullptr)
-		{
-			std::cout << "Atom: " << atom->atomName() << std::endl;
-			std::cout << "init pos: " << 
-			glm::to_string(atom->initialPosition()) << std::endl;
-		}
-		std::cout << "Torsion: " << torsion << std::endl;
-		std::cout << "Coordination: " << glm::to_string(coordination) << std::endl;
-		std::cout << "Basis: " << glm::to_string(basis) << std::endl;
-		std::cout << "wip: " << glm::to_string(wip) << std::endl;
-		std::cout << "inherit: " << glm::to_string(inherit) << std::endl;
-		std::cout << std::endl;
-	}
-
+	glm::mat4x4 prepareRotation() const;
+	
+	void writeToChildren(std::vector<AtomBlock> &context, int idx,
+	                     bool usingPrograms);
 };
 
 #endif

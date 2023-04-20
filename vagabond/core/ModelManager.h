@@ -24,10 +24,8 @@
 #include "Model.h"
 #include "Manager.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
-
-class Molecule;
 
 class ModelManager : public Manager<Model>,
 public Progressor
@@ -51,6 +49,7 @@ public:
 	
 	void housekeeping();
 	void autoModel();
+	void rescan();
 	
 	bool tryLock()
 	{
@@ -62,10 +61,11 @@ public:
 		_mutex->unlock();
 	}
 
-	void purgeMolecule(Molecule *mol);
+	void purgeInstance(Instance *inst);
 	void purgeEntity(Entity *ent);
 	void purgeModel(Model *mol);
 	void connectionsToDatabase();
+	Model *modelUsingFilename(std::string &filename);
 
 	virtual const std::string progressName() const
 	{

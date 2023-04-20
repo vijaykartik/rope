@@ -26,7 +26,7 @@
 #include <vagabond/core/EntityManager.h>
 #include <vagabond/core/Environment.h>
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 CalculateMetadata::CalculateMetadata(Scene *prev, Entity *ent) : Scene(prev)
@@ -71,20 +71,21 @@ void CalculateMetadata::populateBoundEntities()
 		Metadata::KeyValues kv;
 		kv["model"] = m->id();
 
-		for (const Entity &e : em->objects())
+//		std::vector<Entity *> entities = em->entities();
+		for (const Entity *e : em->entities())
 		{
-			if (&e == _entity)
+			if (e == _entity)
 			{
 				continue;
 			}
 
-			if (!m->hasEntity(e.name()))
+			if (!m->hasEntity(e->name()))
 			{
 				continue;
 			}
 			
-			std::string str = i_to_str(m->moleculeCountForEntity(e.name()));
-			std::string header = "has_" + e.name();
+			std::string str = i_to_str(m->instanceCountForEntity(e->name()));
+			std::string header = "has_" + e->name();
 			
 			kv[header] = str;
 			kv["has_other_entity"] = Value("true");

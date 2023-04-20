@@ -22,12 +22,13 @@
 class AtomGroup;
 class Atom;
 
+#include <set>
 #include "Bondstraint.h"
-#include "ResidueId.h"
+#include "Parameter.h"
 #include "../utils/glm_import.h"
 #include <stdexcept>
 
-class BondTorsion : public Bondstraint
+class BondTorsion : public Parameter
 {
 public:
 	/** ownership is taken over by the AtomGroup after creation */
@@ -42,26 +43,56 @@ public:
 		SourceDerived
 	};
 	
+	virtual double empiricalMeasurement()
+	{
+		return measurement(BondTorsion::SourceDerived);
+	}
+
 	double measurement(BondTorsion::Source source);
 	double startingAngle();
+	
+	virtual size_t atomCount() const
+	{
+		return 4;
+	}
+	
+	virtual bool isTorsion() const
+	{
+		return true;
+	}
+
+	virtual Atom *anAtom()
+	{
+		return atom(1);
+	}
 
 	double angle() const
 	{
 		return _angle;
 	}
 
-	void setRefinedAngle(double angle)
+	void setRefinedAngle(const double angle)
 	{
 		_refinedAngle = angle;
-		_refined = true;
+		_working = true;
+	}
+	
+	virtual void setValue(const double value)
+	{
+		setRefinedAngle(value);
 	}
 	
 	const double refinedAngle() const
 	{
 		return _refinedAngle;
 	}
+
+	virtual const double value()
+	{
+		return startingAngle();
+	}
 	
-	Atom *atom(int i) const
+	virtual Atom *atom(int i) const
 	{
 		if (i == 0) return _a;
 		if (i == 1) return _b;
@@ -70,12 +101,12 @@ public:
 		throw std::runtime_error("asked for silly atom number from bond angle");
 	}
 	
-	bool coversMainChain();
+	virtual bool coversMainChain();
 	bool isPeptideBond() const;
 
 	bool spansMultipleChains() const;
 	
-	const ResidueId residueId();
+	virtual const ResidueId residueId();
 	
 	bool atomIsTerminal(Atom *a)
 	{
@@ -102,7 +133,7 @@ public:
 		else return Key(_d, _c, _b, _a);
 	}
 
-	bool isConstrained() const;
+	virtual bool isConstrained() const;
 	
 	void setConstrained(bool constrained)
 	{
@@ -115,6 +146,11 @@ public:
 	
 	virtual const std::string desc() const;
 	virtual const std::string reverse_desc() const;
+
+	virtual bool hasDesc(std::string d) const
+	{
+		return (d == desc() || d == reverse_desc());
+	}
 	
 	static double maxSeparation()
 	{
@@ -131,9 +167,8 @@ private:
 	double _measuredAngle = 0;
 
 	bool _measured = false;
-	bool _refined = false;
 	bool _constrained = false;
-	bool _instrumental = false;
+	bool _working = false;
 	
 	ResidueId _resId;
 	bool _gotId = false;

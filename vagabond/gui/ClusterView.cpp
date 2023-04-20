@@ -25,7 +25,7 @@
 
 #include <vagabond/core/Rule.h>
 #include <vagabond/core/Metadata.h>
-#include <vagabond/core/Molecule.h>
+#include <vagabond/core/Polymer.h>
 #include <vagabond/c4x/ClusterSVD.h>
 #include <vagabond/core/ObjectGroup.h>
 #include <vagabond/core/PathManager.h>
@@ -279,8 +279,8 @@ void ClusterView::interacted(int rawidx, bool hover, bool left)
 
 	if (_confSpaceView->returnToView() && left && !hover)
 	{
-		Molecule *mol = static_cast<Molecule *>(group.object(idx));
-		_confSpaceView->reorientToMolecule(mol);
+		Polymer *pol = static_cast<Polymer *>(group.object(idx));
+		_confSpaceView->reorientToPolymer(pol);
 		return;
 	}
 
@@ -342,7 +342,7 @@ void ClusterView::addPaths()
 			continue;
 		}
 		
-		if (_confSpaceView->entity() != path.startMolecule()->entity())
+		if (_confSpaceView->entity() != path.startInstance()->entity())
 		{
 			continue;
 		}

@@ -20,10 +20,11 @@
 #define __vagabond__RefinementInfo__
 
 #include <vagabond/c4x/Angular.h>
+#include "ResidueTorsion.h"
 #include "Residue.h"
 #include "TorsionRef.h"
 
-class Molecule;
+class Polymer;
 
 /** \class RefinementInfo
  *  \brief contains information about how to replicate refinement setup */
@@ -36,18 +37,18 @@ namespace Refine
 		TorsionRef torsion;
 		float angle;
 		
-		RTA(const ResidueTorsion &rt)
+		RTA(ResidueTorsion &rt)
 		{
-			id = rt.residue->id();
-			torsion = rt.torsion;
-			float angle = 0;
+			id = rt.id();
+			torsion = rt.torsion();
+			angle = 0;
 		}
 		
 		static std::vector<RTA> vector_from_rts(std::vector<ResidueTorsion> &rts)
 		{
 			std::vector<RTA> ret;
 			ret.reserve(rts.size());
-			for (const ResidueTorsion &rt : rts)
+			for (ResidueTorsion &rt : rts)
 			{
 				ret.push_back(rt);
 			}
@@ -76,7 +77,7 @@ namespace Refine
 	struct Info
 	{
 		std::string mol_id;
-		Molecule *molecule = nullptr;
+		Polymer *molecule = nullptr;
 		std::vector<Axis> axes;
 		int samples = 120;
 		

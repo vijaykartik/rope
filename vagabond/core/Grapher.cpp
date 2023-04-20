@@ -19,6 +19,8 @@
 #include "Grapher.h"
 #include "BondTorsion.h"
 #include "TorsionBasis.h"
+#include "programs/RingProgram.h"
+#include "programs/RingProgrammer.h"
 #include "BondCalculator.h"
 #include "BondSequence.h"
 #include "Atom.h"
@@ -45,14 +47,33 @@ Grapher::Grapher(Grapher &other)
 	_atoms = other._atoms;
 	_anchors = other._anchors;
 	_atom2Graph = other._atom2Graph;
-	_torsion2Graph = other._torsion2Graph;
+	_parameter2Graph = other._parameter2Graph;
 
 	_graphsDone = other._graphsDone;
 	_anchorsDone = other._anchorsDone;
 	_atomsDone = other._atomsDone;
 
 	_original = false;
+}
 
+void Grapher::setupProgrammers()
+{
+	if (_programmers.size() > 0)
+	{
+		return;
+	}
+
+	std::vector<RingProgrammer *> all = *RingProgrammer::allProgrammers();
+	
+	for (RingProgrammer *p : all)
+	{
+		_programmers.push_back(*p);
+	}
+	
+	for (size_t i = 0; i < _programmers.size(); i++)
+	{
+		_workingProggers[i].push_back(_programmers[i]);
+	}
 }
 
 bool Grapher::preferredConnection(Atom *atom, Atom *next)
@@ -69,6 +90,63 @@ bool Grapher::preferredConnection(Atom *atom, Atom *next)
 	}
 	
 	return true;
+}
+
+bool Grapher::beyondVisitLimit(Atom *atom)
+{
+	return (_visits[atom] >= _visitLimit);
+}
+
+int Grapher::jumpsToAtom(AtomGraph *last, Atom *search, int max)
+{
+	struct GraphNum
+	{
+		AtomGraph *grapher;
+		int num;
+	};
+
+	std::queue<GraphNum> todo;
+	std::vector<AtomGraph *> rejected;
+	todo.push(GraphNum{last, 0});
+
+	while (todo.size())
+	{
+		GraphNum test = todo.front();
+		
+		if (test.grapher->atom == search)
+		{
+			return test.num;
+		}
+
+		todo.pop();
+
+		int next = test.num + 1;
+		
+		if (std::find(rejected.begin(), rejected.end(), test.grapher) 
+		    != rejected.end())
+		{
+			continue;
+		}
+		
+		rejected.push_back(test.grapher);
+		
+		if (next >= max)
+		{
+			continue;
+		}
+		
+		if (test.grapher->prior)
+		{
+			todo.push(GraphNum{test.grapher->prior, next});
+		}
+		
+		for (size_t i = 0; i < test.grapher->children.size(); i++)
+		{
+			todo.push(GraphNum{test.grapher->children[i], next});
+		}
+	}
+	
+	return -1;
 }
 
 void Grapher::extendGraphNormally(AtomGraph *current, 
@@ -93,15 +171,34 @@ void Grapher::extendGraphNormally(AtomGraph *current,
 
 		/* don't go down a sulphur-to-sulphur transition if we want
 		 * to know the sequence */
-		if (_singleChain && !preferredConnection(atom, next))
+		if (_inSequence && !preferredConnection(atom, next))
+		{
+			continue;
+		}
+		
+		int between = jumpsToAtom(current, next, _ringSizeLimit + 1);
+		if (between >= 0 && between < _ringSizeLimit)
 		{
 			continue;
 		}
 
 		/* important not to go round in circles */
-		if (std::find(_atoms.begin() + _atomsDone, _atoms.end(), next) !=
-		    _atoms.end())
+		if (beyondVisitLimit(next))
 		{
+			// but if it's beyond the limit, it's a joint
+			
+			// we only care if the visit limit is not 1, though
+			if (_visitLimit > 1)
+			{
+				if (_jointLimit < 0 && _joints > _jointLimit)
+				{
+					continue;
+				}
+
+				current->joint = true;
+				_joints++;
+			}
+
 			continue;
 		}
 
@@ -110,6 +207,7 @@ void Grapher::extendGraphNormally(AtomGraph *current,
 		nextGraph->grandparent = current->parent;
 		nextGraph->parent = current->atom;
 		nextGraph->atom = next;
+		nextGraph->prior = current;
 
 		nextGraph->depth = current->depth + 1;
 		nextGraph->maxDepth = -1;
@@ -156,7 +254,28 @@ void Grapher::addGraph(AtomGraph *graph)
 	_graphs.push_back(graph);
 	_atoms.push_back(graph->atom);
 
-	_atom2Graph[graph->atom] = graph;
+	if (_visits[graph->atom] == 0)
+	{
+		_atom2Graph[graph->atom] = graph;
+	}
+	// we only care about graph joints if the visit limit is greater than 1
+	// and if we actually have a parent atom
+	else if (graph->parent && _visitLimit > 1)
+	// normally, the upcoming visits would be one less than the current.
+	// however, if they're the same, that means it's become a loop join.
+	{
+		if (_visits[graph->atom] == _visits[graph->parent])
+		{
+			graph->joint = true;
+		}
+	}
+
+	_visits[graph->atom]++;
+	
+	if (_visits[graph->atom] > _observedVisitLimit)
+	{
+		_observedVisitLimit = _visits[graph->atom];
+	}
 }
 
 bool AtomGraph::childrenOnlyHydrogens()
@@ -177,38 +296,19 @@ bool AtomGraph::childrenOnlyHydrogens()
 
 void Grapher::calculateMissingMaxDepths()
 {
-	for (size_t i = 0; i < _graphs.size(); i++)
+	for (int i = _graphs.size() - 1; i >= 0; i--)
 	{
 		AtomGraph *head = _graphs[i];
-		std::set<Atom *> previous;
-
-		/* assign this graph's depth up the entire chain, if higher */
-		if (head->children.size() == 0 && head->maxDepth < 0)
+		if (head->children.size() == 0)
 		{
-			AtomGraph *curr = head;
 			head->maxDepth = head->depth;
+		}
 
-			while (true)
+		for (AtomGraph *child : head->children)
+		{
+			if (child->depth > head->maxDepth)
 			{
-				Atom *p = curr->parent;
-				if (p == nullptr || previous.count(p))
-				{
-					break;
-				}
-
-				previous.insert(p);
-				AtomGraph *gp = _atom2Graph[p];
-				if (gp == nullptr)
-				{
-					break;
-				}
-
-				if (gp->maxDepth < head->maxDepth)
-				{
-					gp->maxDepth = head->maxDepth;
-				}
-				
-				curr = gp;
+				head->maxDepth = child->depth;
 			}
 		}
 	}
@@ -255,6 +355,7 @@ void Grapher::fillTorsionAngles(TorsionBasis *basis)
 	for (size_t i = _graphsDone; i < _graphs.size(); i++)
 	{
 		_graphs[i]->torsion_idx = -1;
+
 		if (_graphs[i]->children.size() == 0)
 		{
 			continue;
@@ -263,28 +364,23 @@ void Grapher::fillTorsionAngles(TorsionBasis *basis)
 		/* we need to find the child with the priority torsion */
 		for (size_t j = 0; j < _graphs[i]->children.size(); j++)
 		{
-			Atom *self = _graphs[i]->atom;
-			Atom *next = _graphs[i]->children[j]->atom;
-			Atom *grandparent = _graphs[i]->grandparent;
-			Atom *parent = _graphs[i]->parent;
+			AtomGraph *child = _graphs[i]->children[j];
+			BondTorsion *torsion = child->controllingTorsion();
 
-			if (next && self && parent && grandparent)
+			if (torsion == nullptr)
 			{
-				BondTorsion *torsion = self->findBondTorsion(next, self, 
-				                                             parent, 
-				                                             grandparent);
-				
-				/* assign something, but give priority to constraints */
-				if (torsion && (_graphs[i]->torsion == nullptr || 
-				                torsion->isConstrained()))
-				{
-					_graphs[i]->torsion = torsion;
-				}
+				continue;
+			}
+
+			/* assign something, but give priority to constraints */
+			if (_graphs[i]->torsion == nullptr || torsion->isConstrained())
+			{
+				_graphs[i]->torsion = torsion;
 			}
 		}
-
-		int idx = basis->addTorsion(_graphs[i]->torsion, _graphs[i]->atom);
-		_torsion2Graph[_graphs[i]->torsion] = _graphs[i];
+		
+		int idx = basis->addParameter(_graphs[i]->torsion, _graphs[i]->atom);
+		_parameter2Graph[_graphs[i]->torsion] = _graphs[i];
 		_graphs[i]->torsion_idx = idx;
 	}
 }
@@ -342,7 +438,6 @@ void Grapher::fixBlockAsGhost(AtomBlock &block, Atom *anchor)
 {
 	block.atom = nullptr;
 	block.basis = anchor->transformation();
-//	block.coordination = anchor->transformation();
 	block.write_locs[0] = 1;
 	block.torsion = 0;
 }
@@ -392,47 +487,91 @@ void Grapher::refreshTargets(BondCalculator *calc) const
 
 }
 
-void Grapher::assignAtomToBlock(AtomBlock &block, int idx, Atom *atom)
+void Grapher::assignAtomToBlock(AtomBlock &block, AtomGraph *gr)
 {
-	if (_atom2Transform.count(atom))
+	if (_atom2Transform.count(gr->atom))
 	{
-		AtomBlock &b = _atom2Transform[atom];
+		AtomBlock &b = _atom2Transform[gr->atom];
 		block = b;
 	}
 	else
 	{
-		block.atom = atom;
-		size_t blc = atom->bondLengthCount();
+		block.atom = gr->atom;
+		size_t blc = gr->atom->bondLengthCount();
 		size_t max = 4;
 		block.nBonds = std::min(blc, max);
 		block.wip = glm::mat4(0.);
 
 		refreshTarget(block);
 	}
-
-	block.torsion_idx = _atom2Graph[atom]->torsion_idx;
-	BondTorsion *torsion = _atom2Graph[atom]->torsion;
-	
-	if (torsion != nullptr)
-	{
-		double t = torsion->startingAngle();
-		block.torsion = t;
-	}
 	
 	for (size_t i = 0; i < 4; i++)
 	{
 		block.write_locs[i] = -1;
 	}
+	
+	block.torsion_idx = -1;
 
-	std::string symbol = atom->elementSymbol().substr(0, 2);
-	const char *ele = symbol.c_str();
-	memcpy(block.element, ele, sizeof(char) * 2);
+	if (gr->atom)
+	{
+		std::string symbol = gr->atom->elementSymbol().substr(0, 2);
+		const char *ele = symbol.c_str();
+		memcpy(block.element, ele, sizeof(char) * 2);
+	}
+
+	block.torsion_idx = gr->torsion_idx;
+	BondTorsion *torsion = gr->torsion;
+
+	if (torsion != nullptr)
+	{
+		double t = torsion->startingAngle();
+		block.torsion = t;
+	}
+}
+
+void Grapher::sendAtomToProgrammers(AtomGraph *ag, int idx, 
+                                    std::vector<AtomBlock> &blocks, 
+                                    TorsionBasis *basis)
+{
+	for (size_t i = 0; i < _programmers.size(); i++)
+	{
+		for (size_t j = 0; j < _workingProggers[i].size(); j++)
+		{
+			RingProgrammer &programmer = _workingProggers[i][j];
+			bool should_duplicate = programmer.registerAtom(ag, idx);
+			
+			if (should_duplicate)
+			{
+				// push back a new programmer template to keep track
+				// of additional rings of the same type.
+				_workingProggers[i].push_back(_programmers[i]);
+				
+				// new programmer should have missed crucial atoms so
+				// won't handle the same ring twice
+			}
+			else if (programmer.areExitConditionsMet())
+			{
+				programmer.makeProgram(blocks, programCount(), basis);
+				RingProgram *prog = programmer.program();
+				if (prog && prog->isValid())
+				{
+					_programs.push_back(prog);
+				}
+				else
+				{
+					int ti = programmer.triggerIndex();
+					blocks[ti].program = -1;
+				}
+				_workingProggers[i].erase(_workingProggers[i].begin() + j);
+			}
+		}
+	}
 
 }
 
-
-std::vector<AtomBlock> Grapher::turnToBlocks()
+std::vector<AtomBlock> Grapher::turnToBlocks(TorsionBasis *basis)
 {
+	setupProgrammers();
 	int total = _atoms.size() + _anchors.size();
 	total -= _atomsDone + _anchorsDone;
 	int curr = 0;
@@ -456,7 +595,7 @@ std::vector<AtomBlock> Grapher::turnToBlocks()
 		
 		if (!prev)
 		{
-			assignAtomToBlock(blocks[curr], curr, anchor);
+			assignAtomToBlock(blocks[curr], anchorGraph);
 			fixBlockAsGhost(blocks[curr], anchor);
 			blocks[curr].nBonds = anchorGraph->children.size();
 			curr++;
@@ -467,7 +606,11 @@ std::vector<AtomBlock> Grapher::turnToBlocks()
 			AtomGraph *g = todo.front();
 			todo.pop();
 
-			assignAtomToBlock(blocks[curr], curr, g->atom);
+			_block2Graph[curr] = g;
+			assignAtomToBlock(blocks[curr], g);
+
+			/* check for available programs */
+			sendAtomToProgrammers(g, curr, blocks, basis);
 
 			curr++;
 			
@@ -486,14 +629,6 @@ std::vector<AtomBlock> Grapher::turnToBlocks()
 
 void Grapher::fillMissingWriteLocations(std::vector<AtomBlock> &blocks)
 {
-	std::map<Atom *, int> blockMap;
-
-	for (size_t i = 0; i < blocks.size(); i++)
-	{
-		Atom *atom = blocks[i].atom;
-		blockMap[atom] = i;
-	}
-
 	for (size_t i = 0; i < blocks.size(); i++)
 	{
 		Atom *atom = blocks[i].atom;
@@ -502,22 +637,27 @@ void Grapher::fillMissingWriteLocations(std::vector<AtomBlock> &blocks)
 			continue;
 		}
 
-		AtomGraph *graph = _atom2Graph[atom];
+		AtomGraph *graph = _block2Graph[i];
+
 		Atom *children[4] = {nullptr, nullptr, nullptr, nullptr};
 		int num = graph->children.size();
 		
-		for (size_t j = 0; j < num; j++)
+		// loop through all atom children
+		for (size_t j = 0; j < num && j < 4; j++)
 		{
 			Atom *next = graph->children[j]->atom;
+			children[j] = next;
 			
-			if (j < 4)
+			int index = -1;
+			for (size_t k = i + 1; k < blocks.size(); k++)
 			{
-				children[j] = next;
+				if (blocks[k].atom == next)
+				{
+					index = k - i;
+					break;
+				}
 			}
 
-			int index = blockMap[next];
-			index -= i;
-			
 			if (index <= 0)
 			{
 				throw std::runtime_error("Insane index specified in "
@@ -674,4 +814,68 @@ PCA::Matrix Grapher::distanceMatrix()
 	fillDistances(m);
 
 	return m;
+}
+
+std::vector<const AtomGraph *> Grapher::joints() const
+{
+	std::vector<const AtomGraph *> js;
+	for (const AtomGraph *graph : _graphs)
+	{
+		if (graph->joint)
+		{
+			js.push_back(graph);
+		}
+	}
+
+	return js;
+}
+
+void Grapher::passTorsionsToSisters(BondSequence *sequence) const
+{
+	const std::vector<AtomBlock> &blocks = sequence->blocks();
+
+	for (size_t i = 0; i < blocks.size(); i++)
+	{
+		passTorsionsToSisters(blocks, i);
+	}
+}
+
+void Grapher::passTorsionsToSisters(const std::vector<AtomBlock> &blocks, 
+                                    int idx) const
+{
+	if (_block2Graph.count(idx) == 0)
+	{
+		return;
+	}
+
+	const AtomGraph *graph = _block2Graph.at(idx);
+
+	if (graph->torsion == nullptr) 
+	{
+		// isn't responsible for any torsion
+		return;
+	}
+	
+	float torsion = graph->torsion->value();
+	const AtomBlock &block = blocks[idx];
+	
+	if (block.program < -1)
+	{
+		// got turned into a program
+		return;
+	}
+
+	for (size_t i = 1; i < graph->children.size(); i++)
+	{
+		AtomGraph *gr = graph->children[i];
+		BondTorsion *t = gr->controllingTorsion();
+
+		glm::vec2 xy = glm::vec2(block.coordination[i]);
+		float add = rad2deg(atan2(xy.y, xy.x));
+		add -= 180;
+		
+		float estimate = torsion + add;
+		t->setValue(estimate);
+		t->setRefined(true);
+	}
 }

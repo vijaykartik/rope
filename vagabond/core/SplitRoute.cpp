@@ -17,13 +17,13 @@
 // Please email: vagabond @ hginn.co.uk for more details.
 
 #include "SplitRoute.h"
-#include "Molecule.h"
+#include "Polymer.h"
 #include "AtomGroup.h"
 #include "BondSequence.h"
 #include "Grapher.h"
 
-SplitRoute::SplitRoute(Molecule *mol, Cluster<MetadataGroup> *cluster, int dims)
-: PlausibleRoute(mol, cluster, dims)
+SplitRoute::SplitRoute(Instance *inst, Cluster<MetadataGroup> *cluster, int dims)
+: PlausibleRoute(inst, cluster, dims)
 {
 	_threads = 2;
 	_maximumCycles = 5;
@@ -104,6 +104,7 @@ void SplitRoute::addTorsionIndices(std::vector<int> &idxs, AtomGraph *gr)
 
 bool SplitRoute::optimiseConnections()
 {
+	/*
 	startTicker("Optimising connections", _atoms.size());
 
 	bool result = false;
@@ -135,7 +136,8 @@ bool SplitRoute::optimiseConnections()
 
 	_maxJobRuns = 20;
 	finishTicker();
-	return result;
+	*/
+	return false;
 }
 
 void SplitRoute::calculateFirstAnchors()

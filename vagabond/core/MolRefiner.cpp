@@ -17,9 +17,9 @@
 // Please email: vagabond @ hginn.co.uk for more details.
 
 #include "MolRefiner.h"
+#include "Polymer.h"
 #include "ArbitraryMap.h"
 #include "Sampler.h"
-#include "AxisNudger.h"
 #include "ChemotaxisEngine.h"
 
 MolRefiner::MolRefiner(ArbitraryMap *comparison, 
@@ -84,7 +84,7 @@ std::vector<float> MolRefiner::findTensorAxes(std::vector<float> &triangle)
 	return tensor;
 }
 
-int MolRefiner::sendJob(std::vector<float> &all)
+int MolRefiner::sendJob(const std::vector<float> &all)
 {
 	std::vector<float> axis = all;
 	axis.resize(_info->axes.size());
@@ -97,31 +97,20 @@ int MolRefiner::sendJob(std::vector<float> &all)
 	std::vector<float> tensor = findTensorAxes(triangle);
 
 	submitJob(axis, tensor, true);
-	return _groupTicketCount;
+	return getLastTicket();
 }
 
 float MolRefiner::getResult(int *job_id)
 {
 	retrieveJobs();
-	
-	if (_group2Scores.size() == 0)
-	{
-		*job_id = -1;
-		return FLT_MAX;
-	}
-	
-	auto it = _group2Scores.begin();
-	*job_id = it->first;
-	float result = it->second;
-	_group2Scores.erase(it);
-	return -result;
+	return RunsEngine::getResult(job_id);
 }
 
 void MolRefiner::submitJob(std::vector<float> mean, std::vector<float> tensor,
                            bool show)
 {
 	std::vector<int> group;
-	_groupTicketCount++;
+	int grpTicket = getNextTicket();
 
 	for (BondCalculator *calc : _calculators)
 	{
@@ -147,7 +136,7 @@ void MolRefiner::submitJob(std::vector<float> mean, std::vector<float> tensor,
 
 		int ticket = calc->submitJob(job);
 		group.push_back(ticket);
-		_ticket2Group[ticket] = _groupTicketCount;
+		_ticket2Group[ticket] = grpTicket;
 	}
 }
 
@@ -181,7 +170,7 @@ void MolRefiner::retrieveJobs()
 			if (r->requests & JobMapCorrelation)
 			{
 				float cc = r->correlation;
-				_group2Scores[g] += cc;
+				setScoreForTicket(g, cc);
 			}
 			
 			r->destroy();
@@ -220,14 +209,3 @@ void MolRefiner::runEngine()
 	engine->start();
 }
 
-void MolRefiner::nudgeAxis()
-{
-	for (size_t i = 0; i < _info->axes.size(); i++)
-	{
-		AxisNudger *an = new AxisNudger(_info, i, _cluster);
-		an->setup();
-		an->run();
-		an->addToInfo();
-		delete an;
-	}
-}

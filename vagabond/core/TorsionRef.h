@@ -23,7 +23,7 @@
 #include "ResidueId.h"
 
 #include <iostream>
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 class TorsionRef
@@ -46,7 +46,7 @@ public:
 		_tmpAngle = angle;
 	}
 
-	float refinedAngle()
+	const float &refinedAngle() const
 	{
 		return _refinedAngle;
 	}
@@ -56,11 +56,16 @@ public:
 		_refinedAngle = angle;
 	}
 
-	TorsionRef(BondTorsion *tmp);
+	TorsionRef(Parameter *tmp);
 	
 	const std::string &desc() const
 	{
 		return _desc;
+	}
+	
+	bool isHyperParameter() const
+	{
+		return (atomCount() == 1);
 	}
 	
 	bool coversMainChain() const;
@@ -92,13 +97,14 @@ public:
 	}
 
 	std::string atomName(int i) const;
+	
+	size_t atomCount() const;
 private:
 	std::string _desc;
 	std::string _reverse_desc;
 	float _refinedAngle = 0;
 	float _tmpAngle = 0;
-	BondTorsion *_torsion = nullptr;
-
+	Parameter *_parameter = nullptr;
 };
 
 inline void to_json(json &j, const TorsionRef &value)

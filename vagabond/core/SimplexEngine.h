@@ -20,13 +20,16 @@
 #define __vagabond__SimplexEngine__
 
 #include <atomic>
+#include <ostream>
 #include <vector>
 #include <map>
 
-class SimplexEngine
+#include "Engine.h"
+
+class SimplexEngine : public Engine
 {
 public:
-	SimplexEngine();
+	SimplexEngine(RunsEngine *ref);
 	virtual ~SimplexEngine() {};
 
 	void setDimensionCount(int dims)
@@ -44,37 +47,22 @@ public:
 		_maxJobs = maxJobs;
 	}
 
-	bool run();
-
-
 	virtual void finish();
-	
-	bool isDone()
-	{
-		return _done;
-	}
 protected:
+	void run();
+
 	typedef std::vector<float> SPoint;
 
 	const SPoint &bestPoint() const;
-	virtual int sendJob(const SPoint &trial, bool force_update = false);
-	virtual int awaitResult(double *eval);
-	
-	const float bestScore() const
-	{
-		return _points[0].eval;
-	}
-	
+
 	const bool &changedParams() const
 	{
 		return _changedParams;
 	}
 	
 	void printPoint(SPoint &point);
-	std::atomic<bool> _finish;
-	std::atomic<bool> _done{false};
+	std::atomic<bool> _finish{false};
 
-	int _maxJobRuns = 300;
 private:
 	
 	enum Decision
@@ -96,6 +84,22 @@ private:
 		{
 			return (eval < other.eval);
 		}
+		
+		friend std::ostream &operator<<(std::ostream &ss, 
+		                                const TestPoint &tp)
+		{
+			ss << "Point: (";
+			const int max_ = 3;
+			int max = (tp.vertex.size() > max_ ? max_ : tp.vertex.size());
+			for (size_t i = 0; i < max; i++)
+			{
+				ss << tp.vertex[i] << (i < max - 1 ? ", " : "");
+			}
+			if (max > max_) ss << "...";
+			ss << "), eval: " << tp.eval;
+
+			return ss;
+		}
 	};
 
 	void allocateResources();
@@ -103,7 +107,8 @@ private:
 	void reorderVertices();
 	SPoint scaleThrough(SPoint &p, SPoint &q, float k);
 
-	bool awaitResults();
+	bool classifyResults();
+	void collateResults();
 
 	void sendStartingJobs();
 	void sendDecidedJobs();
@@ -112,15 +117,15 @@ private:
 	void sendExpansionJob(int i);
 	void sendShrinkJobs();
 	void shrink();
-	void singleCycle();
+	void cycle();
 	void pickUpResults();
 	void findCentroid();
 
 	std::vector<TestPoint> _points;
-	TestPoint _centroid;
+	TestPoint _centroid{};
 
 	int _dims = 0;
-	int _maxJobs = 0;
+	int _maxJobs = 1;
 	bool _changedParams = false;
 	std::vector<float> _steps;
 };

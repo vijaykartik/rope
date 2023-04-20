@@ -25,6 +25,11 @@
 
 FixIssuesView::FixIssuesView(Scene *prev, Entity *ent) : Scene(prev)
 {
+	if (!ent->hasSequence())
+	{
+		throw std::runtime_error("Entity for issue fixing does not contain "
+		                         "protein");
+	}
 	_entity = ent;
 }
 
@@ -56,16 +61,16 @@ void FixIssuesView::setup()
 {
 	addTitle("Fix issues in " + _entity->name());
 	
-	if (_entity->moleculeCount() == 0)
+	if (_entity->instanceCount() == 0)
 	{
-		Text *t = new Text("No molecules for entity yet");
+		Text *t = new Text("No instances for entity yet");
 		t->setLeft(0.15, 0.2);
 		addObject(t);
 		return;
 	}
 	else
 	{
-		Molecule *m = _entity->molecules()[0];
+		Polymer *m = static_cast<Polymer *>(_entity->instances()[0]);
 		_molecule = m;
 	}
 	

@@ -15,6 +15,7 @@ struct BondNum
 	int num;
 };
 
+class Cyclic;
 class BondLength;
 
 class Atom : public HasBondstraints
@@ -223,7 +224,8 @@ public:
 	
 	void setCode(std::string code);
 	
-	Atom *connectedAtom(int i);
+	Atom *connectedAtom(int i) const;
+	bool isConnectedToAtom(Atom *a) const;
 	
 	const std::string &code() const
 	{
@@ -254,7 +256,7 @@ public:
 	void setTransformation(glm::mat4x4 transform);
 	void setAbsoluteTransformation(glm::mat4x4 transform);
 	
-	int bondsBetween(Atom *end, int maxBonds);
+	int bondsBetween(Atom *end, int maxBonds, bool long_way = false);
 
 	const glm::mat4x4 &transformation() const
 	{
@@ -281,6 +283,16 @@ public:
 	{
 		_colour += add;
 		_count++;
+	}
+
+	void setCyclic(Cyclic *cyc)
+	{
+		_cyclic = cyc;
+	}
+	
+	Cyclic *cyclic()
+	{
+		return _cyclic;
 	}
 private:
 	void changedPosition();
@@ -310,6 +322,7 @@ private:
 	float _colour = 0;
 	int _count = 0;
 	glm::mat4x4 _transform = glm::mat4(1.f);
+	Cyclic *_cyclic = nullptr;
 };
 
 #endif

@@ -35,9 +35,9 @@ std::map<std::string, int> Entity::allMetadataHeaders()
 {
 	std::map<std::string, int> headers;
 	
-	for (const Molecule *molecule : _molecules)
+	for (const Instance *instance : instances())
 	{
-		const Metadata::KeyValues kv = molecule->metadata();
+		const Metadata::KeyValues kv = instance->metadata();
 		
 		if (kv.size() == 0)
 		{
@@ -55,68 +55,17 @@ std::map<std::string, int> Entity::allMetadataHeaders()
 	return headers;
 }
 
-Metadata *Entity::angleBetweenAtoms(AtomRecall a, AtomRecall b, AtomRecall c)
-{
-	Metadata *md = new Metadata();
-	
-	std::string header;
-	header += a.master->id().as_string() + a.atom_name;
-	header += " through ";
-	header += b.master->id().as_string() + b.atom_name;
-	header += " to ";
-	header += c.master->id().as_string() + c.atom_name;
-	
-	AtomRecall new_a = AtomRecall(_sequence.residueLike(a.master->id()),
-	                              a.atom_name);
-	AtomRecall new_b = AtomRecall(_sequence.residueLike(b.master->id()),
-	                              b.atom_name);
-	AtomRecall new_c = AtomRecall(_sequence.residueLike(c.master->id()),
-	                              c.atom_name);
-
-	for (Model *model : _models)
-	{
-		model->angleBetweenAtoms(this, new_a, new_b, new_c, header, md);
-		md->clickTicker();
-	}
-
-	return md;
-}
-
-Metadata *Entity::distanceBetweenAtoms(AtomRecall a, AtomRecall b)
-{
-	Metadata *md = new Metadata();
-	
-	std::string header;
-	header += a.master->id().as_string() + a.atom_name;
-	header += " to ";
-	header += b.master->id().as_string() + b.atom_name;
-	
-	AtomRecall new_a = AtomRecall(_sequence.residueLike(a.master->id()),
-	                              a.atom_name);
-	AtomRecall new_b = AtomRecall(_sequence.residueLike(b.master->id()),
-	                              b.atom_name);
-
-	for (Model *model : _models)
-	{
-		model->distanceBetweenAtoms(this, new_a, new_b, header, md);
-		md->clickTicker();
-	}
-
-	return md;
-}
-
-
 void Entity::checkModel(Model &m)
 {
 	if (m.hasEntity(name()))
 	{
 		m.appendIfMissing(_models);
 
-		for (Molecule &mol : m.molecules())
+		for (Instance *inst : m.instances())
 		{
-			if (mol.entity_id() == name())
+			if (inst->entity_id() == name())
 			{
-				mol.appendIfMissing(_molecules);
+				appendIfMissing(inst);
 			}
 		}
 	}
@@ -124,24 +73,41 @@ void Entity::checkModel(Model &m)
 	triggerResponse();
 }
 
-const bool compare_id(const Molecule *a, const Molecule *b)
-{
-	return a->id() > b->id();
-}
-
 void Entity::housekeeping()
 {
-	std::sort(_molecules.begin(), _molecules.end(), compare_id);
-	_sequence.setEntity(this);
+
 }
 
-size_t Entity::checkForUnrefinedMolecules()
+size_t Entity::unrefinedProlineCount()
 {
 	int count = 0;
 
-	for (const Molecule *mol : _molecules)
+	for (const Instance *inst : instances())
 	{
-		bool refined = mol->isRefined();
+		if (!inst->isRefined())
+		{
+			continue;
+		}
+
+		bool refined = inst->isProlined();
+		
+		if (!refined)
+		{
+			count++;
+		}
+	}
+
+	return count;
+	
+}
+
+size_t Entity::unrefinedInstanceCount()
+{
+	int count = 0;
+
+	for (const Instance *inst : instances())
+	{
+		bool refined = inst->isRefined() && inst->isProlined();
 		
 		if (!refined)
 		{
@@ -155,13 +121,13 @@ size_t Entity::checkForUnrefinedMolecules()
 std::set<Model *> Entity::unrefinedModels()
 {
 	std::set<Model *> models;
-	for (Molecule *mol : _molecules)
+	for (Instance *inst : instances())
 	{
-		bool refined = mol->isRefined();
+		bool refined = inst->isRefined() && inst->isProlined();
 
 		if (!refined)
 		{
-			models.insert(mol->model());
+			models.insert(inst->model());
 		}
 	}
 
@@ -170,25 +136,28 @@ std::set<Model *> Entity::unrefinedModels()
 
 void Entity::throwOutModel(Model *model)
 {
-	size_t before = moleculeCount();
-	std::vector<Molecule *>::iterator it = _molecules.begin();
+	size_t before = instanceCount();
+	std::vector<Instance *> insts = instances();
+	std::vector<Instance *>::iterator it = insts.begin();
 
-	while (it != _molecules.end())
+	while (it != insts.end())
 	{
-		Molecule *m = *it;
+		Instance *i = *it;
 
-		if (m->model_id() == model->name())
+		if (i->model_id() == model->name())
 		{
-			m->eraseIfPresent(_molecules);
-			it = _molecules.begin();
+			Polymer *p = static_cast<Polymer *>(i);
+			insts.erase(it);
+			throwOutInstance(p);
+			it = insts.begin();
 			continue;
 		}
 
 		it++;
 	}
 
-	size_t diff = before - moleculeCount();
-	std::cout << "Removed " << diff << " molecules of model " << 
+	size_t diff = before - instanceCount();
+	std::cout << "Removed " << diff << " polymers of model " << 
 	model->name() << "." << std::endl;
 
 	std::vector<Model *>::iterator jt = _models.begin();
@@ -204,68 +173,62 @@ void Entity::throwOutModel(Model *model)
 	}
 
 	_refineSet.clear();
-	
-	if (_currentModel == model)
-	{
-		_currentModel = nullptr;
-	}
 
 	triggerResponse();
 }
 
-void Entity::throwOutMolecule(Molecule *mol)
-{
-	mol->eraseIfPresent(_molecules);
-}
-
 void Entity::clickTicker()
 {
-	Environment::entityManager()->clickTicker();
+	Environment::entityManager()->forPolymers()->clickTicker();
 }
 
-Molecule *Entity::chooseRepresentativeMolecule()
+Instance *Entity::chooseRepresentativeInstance()
 {
-	Molecule *best = nullptr;
+	Instance *best = nullptr;
+	Instance *highest = nullptr;
 	size_t best_count = 0;
+	float highest_res = FLT_MAX;
 
-	for (Molecule *m : _molecules)
+	for (Instance *i : instances())
 	{
-		size_t count = m->sequence()->modelledResidueCount();
+		size_t count = i->completenessScore();
 		
 		if (count > best_count)
 		{
-			best = m;
+			best = i;
 			best_count = count;
 		}
 	}
+	
+	if (highest != nullptr)
+	{
+		best = highest;
+	}
+	
+	std::cout << "Choosing reference: " << best->id() << std::endl;
 	
 	return best;
 }
 
 MetadataGroup Entity::makeTorsionDataGroup()
 {
-	size_t num = _sequence.torsionCount();
-	std::vector<ResidueTorsion> headers;
-	_sequence.addResidueTorsions(headers);
-
-	MetadataGroup group(num);
-	group.addHeaders(headers);
+	MetadataGroup group = prepareTorsionGroup();
 	
 	if (!Environment::modelManager()->tryLock())
 	{
 		throw std::runtime_error("Busy modifying models, please wait");
 	}
 
-	for (Molecule *mol : _molecules)
+	for (Instance *inst : instances())
 	{
-		mol->addTorsionsToGroup(group, rope::RefinedTorsions);
+		inst->addTorsionsToGroup(group, rope::RefinedTorsions);
 	}
 		
 	PathManager *pm = Environment::env().pathManager();
 
-	for (Molecule *mol : _molecules)
+	for (Instance *inst : instances())
 	{
-		std::vector<Path *> paths = pm->pathsForMolecule(mol);
+		std::vector<Path *> paths = pm->pathsForInstance(inst);
 
 		for (Path *path : paths)
 		{
@@ -282,11 +245,8 @@ MetadataGroup Entity::makeTorsionDataGroup()
 
 PositionalGroup Entity::makePositionalDataGroup()
 {
-	std::vector<Atom3DPosition> headers;
-	_sequence.addAtomPositionHeaders(headers);
-	
-	PositionalGroup group(headers.size());
-	group.addHeaders(headers);
+	PositionalGroup group = preparePositionGroup();
+	const std::vector<Atom3DPosition> &headers = group.headers();
 
 	/* make a quick lookup table for the first residue in each */
 	std::map<ResidueId, int> resIdxs;
@@ -301,21 +261,21 @@ PositionalGroup Entity::makePositionalDataGroup()
 		}
 	}
 	
-	Molecule *reference = chooseRepresentativeMolecule();
+	Instance *reference = chooseRepresentativeInstance();
 	reference->load();
 	reference->currentAtoms()->recalculate();
 	
 	for (Model *m : _models)
 	{
 		bool loaded = false;
-		if (m->molecules().size() > 0 && 
-		    !(m->molecules()).front().hasAtomPositionList(reference))
+		if (m->polymers().size() > 0 && 
+		    !(m->polymers()).front().hasAtomPositionList(reference))
 		{
 			m->load(Model::NoGeometry);
 			loaded = true;
 		}
 
-		for (Molecule &mm : m->molecules())
+		for (Polymer &mm : m->polymers())
 		{
 			std::vector<Posular> vex = mm.atomPositionList(reference,
 			                                               headers, resIdxs);

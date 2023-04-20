@@ -17,14 +17,13 @@
 // Please email: vagabond @ hginn.co.uk for more details.
 
 #include "StructureModification.h"
-#include <vagabond/core/BondSequenceHandler.h>
-#include <vagabond/core/Molecule.h>
+#include <vagabond/core/Polymer.h>
 #include <vagabond/core/ConcertedBasis.h>
 
-StructureModification::StructureModification(Molecule *mol, int num, int dims)
+StructureModification::StructureModification(Instance *mol, int num, int dims)
 : _sampler(num, dims)
 {
-	_molecule = mol;
+	_instance = mol;
 	_num = num;
 	_dims = dims;
 	_torsionType = TorsionBasis::TypeCustom;
@@ -51,6 +50,7 @@ void StructureModification::makeCalculator(Atom *anchor, bool has_mol)
 	_calculators.push_back(new BondCalculator());
 	BondCalculator &calc = *_calculators.back();
 
+	calc.setInSequence(true);
 	calc.setPipelineType(BondCalculator::PipelineAtomPositions);
 	calc.setMaxSimultaneousThreads(_threads);
 	calc.setSampler(&_sampler);
@@ -95,13 +95,11 @@ void StructureModification::finishHetatmCalculator()
 	_hetatmCalc->start();
 }
 
-bool StructureModification::checkForMolecule(AtomGroup *grp)
+bool StructureModification::checkForInstance(AtomGroup *grp)
 {
 	for (size_t i = 0; i < grp->size(); i++)
 	{
-		std::string ch = (*grp)[i]->chain();
-		
-		if (_molecule->has_chain_id(ch))
+		if (_instance->atomBelongsToInstance((*grp)[i]))
 		{
 			return true;
 		}
@@ -114,7 +112,7 @@ void StructureModification::startCalculator()
 {
 	if (_fullAtoms == nullptr)
 	{
-		_fullAtoms = _molecule->currentAtoms();
+		_fullAtoms = _instance->currentAtoms();
 	}
 
 	for (size_t i = 0; i < _fullAtoms->connectedGroups().size(); i++)
@@ -126,7 +124,7 @@ void StructureModification::startCalculator()
 			continue;
 		}
 		
-		bool has_mol = checkForMolecule(_fullAtoms->connectedGroups()[i]);
+		bool has_mol = checkForInstance(_fullAtoms->connectedGroups()[i]);
 		
 		if (!anchor->hetatm())
 		{
@@ -157,7 +155,7 @@ bool StructureModification::supplyTorsions(const std::vector<ResidueTorsion> &li
 	bool success = false;
 	for (BondCalculator *calc : _calculators)
 	{
-		TorsionBasis *basis = calc->sequenceHandler()->torsionBasis();
+		TorsionBasis *basis = calc->torsionBasis();
 		ConcertedBasis *cb = static_cast<ConcertedBasis *>(basis);
 
 		success |= fillBasis(cb, list, values, _axis);
@@ -173,14 +171,14 @@ bool StructureModification::fillBasis(ConcertedBasis *cb,
                                       const std::vector<Angular> &values,
                                       int axis)
 {
-	bool result = cb->fillFromMoleculeList(_molecule, axis, list, values);
+	bool result = cb->fillFromInstanceList(_instance, axis, list, values);
 	checkMissingBonds(cb);
 	return result;
 }
 
 void StructureModification::checkMissingBonds(ConcertedBasis *cb)
 {
-	for (BondTorsion *bt : cb->missingBonds())
+	for (Parameter *bt : cb->missingBonds())
 	{
 		if (bt->coversMainChain())
 		{
@@ -198,9 +196,9 @@ void StructureModification::checkMissingBonds(ConcertedBasis *cb)
 	}
 }
 
-void StructureModification::changeMolecule(Molecule *m)
+void StructureModification::changeInstance(Instance *m)
 {
-	_molecule = m;
+	_instance = m;
 	_sideMissing = 0;
 	_mainMissing = 0;
 	_unusedId = nullptr;

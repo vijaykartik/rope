@@ -20,7 +20,7 @@
 #include "Model.h"
 #include "ModelManager.h"
 #include "ArbitraryMap.h"
-#include "Molecule.h"
+#include "Polymer.h"
 #include "Chain.h"
 #include "File.h"
 #include "AtomContent.h"
@@ -58,15 +58,15 @@ const std::string Model::entityForChain(std::string id) const
 void Model::swapChainToEntity(std::string id, std::string entity)
 {
 
-	std::cout << "Switching entity for molecule." << std::endl;
-	if (_chain2Molecule.count(id))
+	std::cout << "Switching entity for polymer." << std::endl;
+	if (_chain2Polymer.count(id))
 	{
-		Molecule *mol = _chain2Molecule[id];
-		if (mol != nullptr)
+		Polymer *pol = _chain2Polymer[id];
+		if (pol != nullptr)
 		{
-			std::cout << "Found old molecule of entity " << 
-			mol->entity_id() << std::endl;
-			std::cout << "Purging old molecule from environment" << std::endl;
+			std::cout << "Found old polymer of entity " << 
+			pol->entity_id() << std::endl;
+			std::cout << "Purging old polymer from environment" << std::endl;
 			_chain2Entity.erase(id);
 		}
 	}
@@ -102,7 +102,7 @@ bool Model::hasEntity(std::string entity) const
 	return false;
 }
 
-Molecule *Model::moleculeFromChain(Chain *ch)
+Polymer *Model::polymerFromChain(Chain *ch)
 {
 	std::string entity = entityForChain(ch->id());
 	if (entity == "")
@@ -110,15 +110,15 @@ Molecule *Model::moleculeFromChain(Chain *ch)
 		return nullptr;
 	}
 
-	Molecule mc(name(), ch->id(), entity, ch->fullSequence());
-	_molecules.push_back(mc);
+	Polymer mc(name(), ch->id(), entity, ch->fullSequence());
+	_polymers.push_back(mc);
 
-	Molecule &ref = _molecules.back();
+	Polymer &ref = _polymers.back();
 
 	ref.addChain(ch->id());
-	ref.getTorsionRefs(ch);
+	ref.putTorsionRefsInSequence(ch);
 	
-	return &_molecules.back();
+	return &_polymers.back();
 }
 
 void Model::write(std::string filename)
@@ -129,13 +129,13 @@ void Model::write(std::string filename)
 	}
 }
 
-void Model::unload()
+bool Model::unload()
 {
-	if (_loadCounter == 0) { return; }
+	if (_loadCounter == 0) { return false; }
 	_loadCounter--;
 //	std::cout << "Model " << name() << " load counter: " 
 //	<< _loadCounter << std::endl;
-	if (_loadCounter > 0) { return; }
+	if (_loadCounter > 0) { return false; }
 	
 	if (_currentFile)
 	{
@@ -149,13 +149,16 @@ void Model::unload()
 		_currentAtoms = nullptr;
 	}
 	
-	for (Molecule &m : _molecules)
+	std::vector<Instance *> insts = instances();
+	for (Instance *inst : insts)
 	{
-		m.unload();
+		inst->wipeAtoms();
 	}
+
+	return true;
 }
 
-void Model::createMolecules()
+void Model::createPolymers()
 {
 	load();
 
@@ -165,7 +168,7 @@ void Model::createMolecules()
 	for (it = _chain2Entity.begin(); it != _chain2Entity.end(); it++)
 	{
 		std::string id = it->first;
-		if (_chain2Molecule.count(id) > 0)
+		if (_chain2Polymer.count(id) > 0)
 		{
 			continue;
 		}
@@ -176,12 +179,12 @@ void Model::createMolecules()
 		
 		if (ch)
 		{
-			moleculeFromChain(ch);
+			polymerFromChain(ch);
 			extra++;
 		}
 	}
 	
-	mergeAppropriateMolecules();
+	mergeAppropriatePolymers();
 	
 	unload();
 }
@@ -190,40 +193,41 @@ std::set<Entity *> Model::entities()
 {
 	std::set<Entity *> entities;
 
-	for (Molecule &m : _molecules)
+	std::vector<Instance *> insts = instances();
+	for (Instance *inst : insts)
 	{
-		if (m.entity() != nullptr)
+		if (inst->entity() != nullptr)
 		{
-			entities.insert(m.entity());
+			entities.insert(inst->entity());
 		}
 	}
 	
 	return entities;
 }
 
-std::set<Molecule *> Model::moleculesForEntity(Entity *ent)
+std::set<Polymer *> Model::polymersForEntity(Entity *ent)
 {
-	std::set<Molecule *> ms;
-	for (Molecule &m : _molecules)
+	std::set<Polymer *> ps;
+	for (Polymer &p : _polymers)
 	{
-		if (m.entity_id() == ent->name())
+		if (p.entity_id() == ent->name())
 		{
-			ms.insert(&m);
+			ps.insert(&p);
 		}
 	}
 
-	return ms;
+	return ps;
 }
 
-bool Model::mergeMoleculesInSet(std::set<Molecule *> molecules)
+bool Model::mergePolymersInSet(std::set<Polymer *> polymers)
 {
 	float best_distance = FLT_MAX;
-	Molecule *best_a = nullptr;
-	Molecule *best_b = nullptr;
+	Polymer *best_a = nullptr;
+	Polymer *best_b = nullptr;
 
-	for (Molecule *a : molecules)
+	for (Polymer *a : polymers)
 	{
-		for (Molecule *b : molecules)
+		for (Polymer *b : polymers)
 		{
 			if (a == b)
 			{
@@ -294,14 +298,14 @@ bool Model::mergeMoleculesInSet(std::set<Molecule *> molecules)
 	if (best_a != nullptr && best_b != nullptr)
 	{
 		best_a->mergeWith(best_b);
-		throwOutMolecule(best_b);
+		throwOutInstance(best_b);
 		return true;
 	}
 
 	return false;
 }
 
-void Model::mergeAppropriateMolecules()
+void Model::mergeAppropriatePolymers()
 {
 	std::set<Entity *> ents = entities();
 	bool restart = true;
@@ -311,14 +315,14 @@ void Model::mergeAppropriateMolecules()
 		restart = false;
 		for (Entity *entity : ents)
 		{
-			std::set<Molecule *> mols = moleculesForEntity(entity);
+			std::set<Polymer *> pols = polymersForEntity(entity);
 
-			if (mols.size() <= 1)
+			if (pols.size() <= 1)
 			{
 				continue;
 			}
 
-			if (mergeMoleculesInSet(mols))
+			if (mergePolymersInSet(pols))
 			{
 				restart = true;
 				break;
@@ -353,14 +357,27 @@ void Model::assignClutter()
 			continue;
 		}
 		
-		Ligand lig(_name, grp);
-		_ligands.push_back(lig);
+		bool found = false;
+		for (Ligand &l : _ligands)
+		{
+			if (l.atomBelongsToInstance(grp->chosenAnchor()))
+			{
+				found = true;
+				break;
+			}
+		}
+		
+		if (!found)
+		{
+			Ligand lig(_name, grp);
+			_ligands.push_back(lig);
+		}
 	}
 
 	std::cout << "Total ligands: " << _ligands.size() << std::endl;
 }
 
-void Model::assignSequencedMolecules(Entity *chosen)
+void Model::assignSequencedPolymers(Entity *chosen)
 {
 	EntityManager *eManager = Environment::entityManager();
 	for (size_t i = 0; i < _currentAtoms->chainCount(); i++)
@@ -415,7 +432,7 @@ void Model::autoAssignEntities(Entity *chosen)
 {
 	load(NoAngles);
 
-	assignSequencedMolecules(chosen);
+	assignSequencedPolymers(chosen);
 	
 #ifdef VERSION_LIGANDS
 	assignClutter();
@@ -440,23 +457,23 @@ const Metadata::KeyValues Model::metadata() const
 
 void Model::housekeeping()
 {
-	for (Molecule &mc : _molecules)
+	for (Polymer &pol : _polymers)
 	{
-		for (const std::string &ch : mc.chain_ids())
+		for (const std::string &ch : pol.chain_ids())
 		{
-			_chain2Molecule[ch] = &mc;
+			_chain2Polymer[ch] = &pol;
 		}
 
-		mc.setModel(this);
+		pol.setModel(this);
 		
 	}
 	
-	if (_chain2Molecule.size() >= _chain2Entity.size())
+	if (_chain2Polymer.size() >= _chain2Entity.size())
 	{
 		return;
 	}
 
-	createMolecules();
+	createPolymers();
 	
 	std::set<Entity *> ents = entities();
 	for (Entity *ent : ents)
@@ -467,18 +484,19 @@ void Model::housekeeping()
 
 void Model::findInteractions()
 {
-	if (_ligands.size() > 0 && _molecules.size() > 0)
+	if (_ligands.size() > 0 && _polymers.size() > 0)
 	{
-		_ligands.front().interfaceWithOther(&_molecules.front());
+		_ligands.front().interfaceWithOther(&_polymers.front());
 	}
 }
 
 void Model::insertTorsions()
 {
 	load();
-	for (Molecule &mc : _molecules)
+	std::vector<Instance *> insts = instances();
+	for (Instance *inst : insts)
 	{
-		mc.insertTorsionAngles(_currentAtoms);
+		inst->insertTorsionAngles(_currentAtoms);
 	}
 	unload();
 }
@@ -487,11 +505,12 @@ void Model::extractTorsions()
 {
 	std::cout << "Extracting torsions from model " << name() << std::endl;
 	load();
-	for (Molecule &mc : _molecules)
+	std::vector<Instance *> insts = instances();
+	for (Instance *inst : insts)
 	{
-		mc.extractTorsionAngles(_currentAtoms);
-		mc.extractTransformedAnchors(_currentAtoms);
-		mc.updateRmsdMetadata();
+		inst->extractTorsionAngles(_currentAtoms);
+		inst->extractTransformedAnchors(_currentAtoms);
+		inst->updateRmsdMetadata();
 	}
 	unload();
 }
@@ -529,15 +548,15 @@ void Model::load(LoadOptions opts)
 	_currentAtoms->setResponder(this);
 }
 
-void Model::refine(bool sameThread)
+void Model::refine(bool sameThread, bool thorough)
 {
 	if (_currentAtoms == nullptr)
 	{
 		load();
 	}
 
-	_currentAtoms->alignAnchor();
-	_currentAtoms->refinePositions(sameThread);
+	_currentAtoms->recalculate();
+	_currentAtoms->refinePositions(sameThread, thorough);
 }
 
 void Model::extractExisting()
@@ -547,13 +566,21 @@ void Model::extractExisting()
 	triggerResponse();
 }
 
-size_t Model::moleculeCountForEntity(std::string entity_id) const
+size_t Model::instanceCountForEntity(std::string entity_id) const
 {
 	size_t count = 0;
 
-	for (const Molecule &m : _molecules)
+	for (const Polymer &pol : _polymers)
 	{
-		if (m.entity_id() == entity_id)
+		if (pol.entity_id() == entity_id)
+		{
+			count++;
+		}
+	}
+
+	for (const Ligand &lig : _ligands)
+	{
+		if (lig.entity_id() == entity_id)
 		{
 			count++;
 		}
@@ -576,60 +603,77 @@ Model Model::autoModel(std::string filename)
 	return m;
 }
 
-void Model::throwOutMolecule(Molecule *mol)
+void Model::throwOutInstance(Instance *inst)
 {
-	std::list<Molecule>::iterator it = _molecules.begin();
-
-	for (Molecule &m : _molecules)
 	{
-		if (mol == &m)
+		std::list<Polymer>::iterator it = _polymers.begin();
+
+		for (Polymer &pol : _polymers)
 		{
-			_molecules.erase(it);
-			return;
+			if (inst->id() == pol.id())
+			{
+				_polymers.erase(it);
+				return;
+			}
+
+			it++;
 		}
-		
-		it++;
+	}
+
+	{
+		for (Ligand &l : _ligands)
+		{
+			std::list<Ligand>::iterator it = _ligands.begin();
+			if (inst->id() == l.id())
+			{
+				_ligands.erase(it);
+				return;
+			}
+
+			it++;
+		}
 	}
 }
 
 void Model::throwOutEntity(Entity *ent)
 {
-	std::list<Molecule>::iterator it = _molecules.begin();
+	std::map<std::string, std::string> newMap;
 
-	std::map<std::string, std::string>::iterator jt;
-	for (jt = _chain2Entity.begin(); jt != _chain2Entity.end(); jt++)
+	for (auto jt = _chain2Entity.begin(); jt != _chain2Entity.end(); jt++)
 	{
 		if (jt->second == ent->name())
 		{
 			std::cout << "Removing " << jt->first << " as instance of " << 
 			"entity " << ent->name() << " from " << name() << std::endl;
-			_chain2Entity.erase(jt);
-
-			jt = _chain2Entity.begin();
-			jt--;
 		}
-		
-		if (_chain2Entity.size() == 0)
+		else
 		{
-			break;
+			newMap[jt->first] = jt->second;
 		}
 	}
+	
+	_chain2Entity = newMap;
 
-	for (Molecule &m : _molecules)
+//	std::list<Polymer>::iterator it = _polymers.begin();
+
+	for (auto it = _polymers.begin(); it != _polymers.end(); )
 	{
-		if (m.entity_id() == ent->name())
+		Polymer &p = *it;
+		std::cout << "Checking " << p.entity_id() << " name " << 
+		p.id() << std::endl;
+		if (p.entity_id() == ent->name())
 		{
-			for (const std::string &chain : m.chain_ids())
+			for (const std::string &chain : p.chain_ids())
 			{
-				_chain2Molecule.erase(chain);
-				std::cout << "Found created molecule " << chain << " to remove "
+				_chain2Polymer.erase(chain);
+				std::cout << "Found polymer " << chain << " to remove "
 				"from " << name() << std::endl;
 			}
 
-			_molecules.erase(it);
-			return;
+			_polymers.erase(it);
+			it = _polymers.begin();
+			continue;
 		}
-		
 		it++;
 	}
 }
@@ -651,15 +695,15 @@ void Model::angleBetweenAtoms(Entity *ent, AtomRecall &a, AtomRecall &b,
 	
 	load();
 	
-	for (Molecule &m : _molecules)
+	for (Polymer &p : _polymers)
 	{
-		if (m.entity_id() != ent->name())
+		if (p.entity_id() != ent->name())
 		{
 			continue;
 		}
 
 		Metadata::KeyValues kv;
-		kv = m.angleBetweenAtoms(a, b, c, header);
+		kv = p.angleBetweenAtoms(a, b, c, header);
 
 		md->addKeyValues(kv, true);
 	}
@@ -679,15 +723,15 @@ void Model::distanceBetweenAtoms(Entity *ent, AtomRecall &a, AtomRecall &b,
 	
 	load(NoGeometry);
 	
-	for (Molecule &m : _molecules)
+	for (Polymer &p : _polymers)
 	{
-		if (m.entity_id() != ent->name())
+		if (p.entity_id() != ent->name())
 		{
 			continue;
 		}
 
 		Metadata::KeyValues kv;
-		kv = m.distanceBetweenAtoms(a, b, header);
+		kv = p.distanceBetweenAtoms(a, b, header);
 
 		md->addKeyValues(kv, true);
 	}
@@ -760,5 +804,23 @@ void Model::export_refined(std::string prefix, std::string suffix)
     write(model_path);
 
     unload();
+}
+
+std::vector<Instance *> Model::instances()
+{
+	std::vector<Instance *> instances;
+	instances.reserve(_polymers.size() + _ligands.size());
+
+	for (Polymer &p : _polymers)
+	{
+		instances.push_back(&p);
+	}
+
+	for (Ligand &l : _ligands)
+	{
+		instances.push_back(&l);
+	}
+	
+	return instances;
 }
 

@@ -22,7 +22,7 @@
 #include "HasMetadata.h"
 #include "MetadataGroup.h"
 #include "SplitRoute.h"
-#include "Molecule.h"
+#include "Polymer.h"
 
 class MetadataGroup;
 
@@ -35,12 +35,12 @@ public:
 
 	void getTorsionRef(int idx);
 
-	Molecule *startMolecule() const
+	Instance *startInstance() const
 	{
-		return _molecule;
+		return _instance;
 	}
 	
-	Molecule *endMolecule()
+	Instance *endInstance()
 	{
 		return _end;
 	}
@@ -92,16 +92,17 @@ public:
 		return _angleArrays[i];
 	}
 private:
-	std::string _startMolecule;
+	std::string _startInstance;
 	std::string _model_id;
-	std::string _endMolecule;
-	Molecule *_molecule = nullptr;
+	std::string _endInstance;
+	Instance *_instance = nullptr;
 	Model *_model = nullptr;
-	Molecule *_end = nullptr;
+	Instance *_end = nullptr;
 	
 	bool _contributeSVD = false;
 	bool _visible = true;
 
+	std::vector<ResidueTorsion> _rts;
 	std::map<int, PlausibleRoute::WayPoints> _wayPoints;
 	std::vector<bool> _flips;
 	std::vector<MetadataGroup::Array> _angleArrays;
@@ -110,9 +111,6 @@ private:
 	PlausibleRoute::InterpolationType _type = PlausibleRoute::Polynomial;
 	
 	PlausibleRoute *_route = nullptr;
-	
-	std::vector<ResidueId> _residueIds;
-	std::vector<TorsionRef> _torsionRefs;
 };
 
 /* waypoint */
@@ -133,10 +131,10 @@ inline void from_json(const json &j, PlausibleRoute::WayPoint &value)
 inline void to_json(json &j, const Path &value)
 {
 	j["model"] = value._model_id;
-	j["start"] = value._startMolecule;
-	j["end"] = value._endMolecule;
-	j["residues"] = value._residueIds;
-	j["torsions"] = value._torsionRefs;
+	j["start"] = value._startInstance;
+	j["end"] = value._endInstance;
+	j["parameters"] = value._rts;
+	j["destination"] = value._destination;
 	j["flips"] = value._flips;
 	j["waypoints"] = value._wayPoints;
 }
@@ -144,14 +142,14 @@ inline void to_json(json &j, const Path &value)
 /* path */
 inline void from_json(const json &j, Path &value)
 {
-	value._startMolecule = j.at("start");
-	value._endMolecule = j.at("end");
+	value._startInstance = j.at("start");
+	value._endInstance = j.at("end");
 	value._model_id = j.at("model");
-
-    std::vector<ResidueId> residues = j.at("residues");
-    value._residueIds = residues;
-    std::vector<TorsionRef> refs = j.at("torsions");
-    value._torsionRefs = refs;
+	std::vector<float> dest = j.at("destination");
+	value._destination = dest;
+	
+	std::vector<ResidueTorsion> rts = j.at("parameters");
+	value._rts = rts;
 
     std::vector<bool> flips = j.at("flips");
     value._flips = flips;

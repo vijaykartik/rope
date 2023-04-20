@@ -16,12 +16,16 @@
 // 
 // Please email: vagabond @ hginn.co.uk for more details.
 
+#include "Model.h"
 #include "Instance.h"
 #include "Interface.h"
-#include "AtomGroup.h"
-#include "Model.h"
+#include "PdbFile.h"
+#include "Superpose.h"
+#include "AtomContent.h"
+#include "Parameter.h"
 #include "Environment.h"
 #include "ModelManager.h"
+#include "EntityManager.h"
 
 Instance::Instance()
 {
@@ -102,12 +106,22 @@ Model *const Instance::model()
 	return _model;
 }
 
-void Instance::unload()
+void Instance::wipeAtoms()
 {
 	delete _currentAtoms;
 	_currentAtoms = nullptr;
+	_motherAtoms = nullptr;
+}
 
-	_model->unload();
+void Instance::unload()
+{
+	bool happened = _model->unload();
+	
+	if (happened)
+	{
+		wipeAtoms();
+
+	}
 }
 
 
@@ -126,6 +140,7 @@ void Instance::setAtomGroupSubset()
 	_motherAtoms = ac;
 	
 	AtomGroup *tmp = new AtomGroup();
+	tmp->setGrabsBondstraints(true);
 	
 	for (size_t i = 0; i < ac->size(); i++)
 	{
@@ -141,3 +156,229 @@ void Instance::setAtomGroupSubset()
 	_currentAtoms = tmp;
 }
 
+Atom *Instance::atomByIdName(const ResidueId &id, std::string name,
+                             std::string chain)
+{
+	load();
+	AtomGroup *grp = currentAtoms();
+	Atom *p = grp->atomByIdName(id, name, chain);
+	unload();
+	
+	return p;
+}
+
+Entity *Instance::entity()
+{
+	if (_entity != nullptr)
+	{
+		return _entity;
+	}
+	
+	_entity = Environment::entityManager()->entity(_entity_id);
+	return _entity;
+}
+
+void Instance::insertTransforms(AtomContent *atoms)
+{
+	std::map<std::string, glm::mat4x4>::iterator it;
+	
+	for (it = _transforms.begin(); it != _transforms.end(); it++)
+	{
+		std::string desc = it->first;
+		glm::mat4x4 transform = it->second;
+		
+		Atom *a = atoms->atomByDesc(desc);
+		if (a == nullptr)
+		{
+			std::cout << "Warning! - missing anchor definition " 
+			<< desc << std::endl;
+			continue;
+		}
+		
+		a->setAbsoluteTransformation(transform);
+	}
+}
+
+void Instance::extractTransformedAnchors(AtomContent *atoms)
+{
+	for (const Atom *anchor : atoms->transformedAnchors())
+	{
+		std::string desc = anchor->desc();
+		glm::mat4x4 transform = anchor->transformation();
+		_transforms[desc] = transform;
+	}
+
+}
+
+const Metadata::KeyValues Instance::metadata() const
+{
+	Metadata::KeyValues mod = _model->metadata();
+	Metadata *md = Environment::metadata();
+
+	const Metadata::KeyValues *ptr = md->valuesForInstance(id());
+	Metadata::KeyValues mol;
+
+	if (ptr != nullptr)
+	{
+		mol = *ptr;
+	}
+
+	Metadata::KeyValues::const_iterator it;
+	
+	for (it = mol.cbegin(); it != mol.cend(); it++)
+	{
+		mod[it->first] = it->second;
+	}
+	
+	return mod;
+}
+
+void Instance::updateRmsdMetadata()
+{
+	load();
+	AtomGroup *atoms = currentAtoms();
+	float val = atoms->rmsd();
+
+	Metadata::KeyValues kv;
+	kv["molecule"] = id();
+	kv["rmsd"] = Value(f_to_str(val, 3));
+	Environment::metadata()->addKeyValues(kv, true);
+	unload();
+}
+
+void Instance::housekeeping()
+{
+	_model = (Environment::modelManager()->model(_model_id));
+	_entity = (Environment::entityManager()->entity(_entity_id));
+	
+}
+
+const Residue *Instance::localResidueForResidueTorsion(const ResidueTorsion &rt)
+{
+	Residue *const master = rt.master();
+	return equivalentLocal(master);
+}
+
+int Instance::indexForParameterFromList(Parameter *param,
+                                        const std::vector<ResidueTorsion> &list)
+{
+	ResidueId target = param->residueId();
+	
+	Residue *master = equivalentMaster(target);
+
+	if (master == nullptr)
+	{
+		return -1;
+	}
+	
+	for (size_t i = 0; i < list.size(); i++)
+	{
+		if (list[i].entity() != _entity)
+		{
+			continue;
+		}
+
+		Residue *const residue = list[i].master();
+		
+		if (residue == nullptr || residue != master)
+		{
+			continue;
+		}
+
+		const std::string &desc = list[i].torsion().desc();
+		
+		if (!param->hasDesc(desc))
+		{
+			continue;
+		}
+		
+		return i;
+	}
+
+	return -1;
+}
+
+float Instance::valueForTorsionFromList(Parameter *param,
+                                        const std::vector<ResidueTorsion> &list,
+                                        const std::vector<Angular> &values,
+                                        std::vector<bool> &found)
+{
+	int idx = indexForParameterFromList(param, list);
+	
+	if (idx < 0)
+	{
+		return NAN;
+	}
+
+	return values[idx];
+}
+
+void Instance::addTorsionsToGroup(MetadataGroup &group, 
+                                  rope::TorsionType type)
+{
+	if (!isRefined())
+	{
+		return;
+	}
+
+	MetadataGroup::Array vals = grabTorsions(type);
+	group.addMetadataArray(this, vals);
+}
+
+void Instance::superposeOn(Instance *other)
+{
+	load();
+	other->load();
+	AtomGroup *otherAtoms = other->currentAtoms();
+	AtomGroup *myAtoms = currentAtoms();
+	myAtoms->recalculate();
+	
+	Superpose sp;
+	for (Atom *a : myAtoms->atomVector())
+	{
+		a->setOtherPosition("original", glm::vec3(NAN));
+	}
+
+	for (Atom *theirs : otherAtoms->atomVector())
+	{
+		Atom *mine = equivalentForAtom(other, theirs);
+		
+		if (mine)
+		{
+			glm::vec3 t = theirs->derivedPosition();
+			glm::vec3 d = mine->derivedPosition();
+			mine->setOtherPosition("original", t);
+			sp.addPositionPair(t, d);
+		}
+	}
+
+	sp.superpose();
+	glm::mat4 tr = sp.transformation();
+
+	for (Atom *a : myAtoms->atomVector())
+	{
+		glm::vec3 d = a->derivedPosition();
+		glm::vec3 update = glm::vec3(tr * glm::vec4(d, 1.f));
+		a->setDerivedPosition(update);
+	}
+
+	/* should (will?) superimpose using these target values */
+	PdbFile::writeAtoms(myAtoms, "test3.pdb");
+
+	other->unload();
+	unload();
+}
+
+Atom *Instance::equivalentForAtom(Instance *other, Atom *atom)
+{
+	if (other->hasSequence())
+	{
+		Polymer *p = static_cast<Polymer *>(other);	
+		return equivalentForAtom(p, atom);
+	}
+	else
+	{
+		Ligand *l = static_cast<Ligand *>(other);	
+		return equivalentForAtom(l, atom);
+	}
+}

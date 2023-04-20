@@ -20,12 +20,14 @@
 #define __vagabond__Environment__
 
 #include <string>
+#include <nlohmann/json.hpp>
+using nlohmann::json;
 
 class Path;
 class Rule;
 class Entity;
 class Metadata;
-class Molecule;
+class Instance;
 class Progressor;
 class FileManager;
 class PathManager;
@@ -90,7 +92,7 @@ public:
 	static void autoModel();
 	static void rescanModels();
 	
-	void purgeMolecule(Molecule *mol);
+	void purgeInstance(Instance *inst);
 	static void purgeModel(std::string name);
 	static void purgeEntity(std::string name);
 	static void purgeRule(Rule &rule);
@@ -99,6 +101,8 @@ public:
 	void save();
 	void load(std::string file = "rope.json");
 private:
+	void loadEntitiesBackwardsCompatible(const json &data);
+
 	FileManager *_fileManager = nullptr;
 	ModelManager *_modelManager = nullptr;
 	EntityManager *_entityManager = nullptr;

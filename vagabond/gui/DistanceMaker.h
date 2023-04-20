@@ -22,6 +22,7 @@
 #include <thread>
 
 #include "SequenceView.h"
+#include <thread>
 
 class Entity;
 class Metadata;

@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <iostream>
 
-SimplexEngine::SimplexEngine()
+SimplexEngine::SimplexEngine(RunsEngine *ref) : Engine(ref)
 {
 	_finish = false;
 }
@@ -34,7 +34,7 @@ void SimplexEngine::reorderVertices()
 
 void SimplexEngine::resetVertex(TestPoint &point)
 {
-	point.vertex.resize(_dims);
+	point.vertex.resize(n());
 	for (size_t i = 0; i < point.vertex.size(); i++)
 	{
 		point.vertex[i] = 0;
@@ -45,9 +45,9 @@ void SimplexEngine::resetVertex(TestPoint &point)
 
 void SimplexEngine::allocateResources()
 {
-	_points.resize(_dims + 1);
+	_points.resize(n() + 1);
 
-	for (size_t i = 0; i < _dims + 1; i++)
+	for (size_t i = 0; i < n() + 1; i++)
 	{
 		resetVertex(_points[i]);
 	}
@@ -59,17 +59,17 @@ void SimplexEngine::findCentroid()
 {
 	resetVertex(_centroid);
 
-	for (size_t j = 0; j < _dims; j++)
+	for (size_t j = 0; j < n(); j++)
 	{
-		for (size_t i = 0; i < _dims; i++)
+		for (size_t i = 0; i < n(); i++)
 		{
 			_centroid.vertex[i] += _points[j].vertex[i];
 		}
 	}
 
-	for (size_t i = 0; i < _dims; i++)
+	for (size_t i = 0; i < n(); i++)
 	{
-		_centroid.vertex[i] /= (float)_dims;
+		_centroid.vertex[i] /= (float)n();
 	}
 }
 
@@ -79,11 +79,9 @@ void SimplexEngine::printPoint(SPoint &point)
 	{
 		std::cout << point[i] << " ";
 	}
-
-	std::cout << std::endl;
 }
 
-void SimplexEngine::singleCycle()
+void SimplexEngine::cycle()
 {
 	int count = 0;
 	int shrink_count = 0;
@@ -91,7 +89,7 @@ void SimplexEngine::singleCycle()
 
 	while (true)
 	{
-		if (count > _maxJobRuns || shrink_count >= 10 || _finish)
+		if (count > _maxRuns || shrink_count >= 10 || _finish)
 		{
 			break;
 		}
@@ -99,20 +97,24 @@ void SimplexEngine::singleCycle()
 		reorderVertices();
 
 		TestPoint &worst = _points[_points.size() - 1];
-		double worst_score = worst.eval;
+		float worst_score = worst.eval;
 
 		TestPoint &second_worst = _points[_points.size() - 2];
-		double second_worst_score = worst.eval;
+		float second_worst_score = second_worst.eval;
 
 		TestPoint &best = _points[0];
-		double best_score = best.eval;
+		float best_score = best.eval;
 		
+		Engine::clearResults();
+
 		findCentroid();
 		SPoint trial = scaleThrough(worst.vertex, _centroid.vertex, -1);
 		sendJob(trial);
 
-		double eval = FLT_MAX;
-		awaitResult(&eval);
+		float eval = FLT_MAX;
+		getResults();
+		Engine::findBestResult(&eval);
+		clearResults();
 		count++;
 		
 		if (eval > best_score && eval < second_worst_score)
@@ -127,8 +129,10 @@ void SimplexEngine::singleCycle()
 			SPoint expanded = scaleThrough(trial, _centroid.vertex, -2);
 			sendJob(expanded);
 			
-			double next = FLT_MAX;
-			awaitResult(&next);
+			float next = FLT_MAX;
+			getResults();
+			Engine::findBestResult(&next);
+			clearResults();
 			
 			worst.vertex = (next < eval ? expanded : trial);
 			worst.eval = (next < eval ? next : eval);
@@ -137,7 +141,7 @@ void SimplexEngine::singleCycle()
 		else 
 		{
 			SPoint contracted;
-			double compare;
+			float compare;
 			if (eval > second_worst_score && eval < worst_score)
 			{
 				contracted = scaleThrough(trial, _centroid.vertex, 0.5);
@@ -151,9 +155,11 @@ void SimplexEngine::singleCycle()
 
 			sendJob(contracted);
 
-			double next = FLT_MAX;
-			awaitResult(&next);
-			
+			float next = FLT_MAX;
+			getResults();
+			Engine::findBestResult(&next);
+			clearResults();
+
 			if (next < compare)
 			{
 				worst.vertex = contracted;
@@ -169,27 +175,30 @@ void SimplexEngine::singleCycle()
 	}
 }
 
-void SimplexEngine::pickUpResults()
+void SimplexEngine::collateResults()
 {
-	while (true)
+	for (auto it = _scores.begin(); it != _scores.end(); it++)
 	{
-		double eval = FLT_MAX;
-		int ticket = awaitResult(&eval);
-		if (ticket < 0)
-		{
-			break;
-		}
+		int ticket = it->first;
 
 		for (size_t i = 0; i < _points.size(); i++)
 		{
 			if (_points[i].tickets.count(ticket) > 0)
 			{
 				SPoint &p = _points[i].tickets[ticket];
-				_points[i].eval = eval;
-				_points[i].vertex = p;
+				_points[i].eval = it->second.score;
+				_points[i].vertex = it->second.vals;
 			}
 		}
 	}
+
+}
+
+void SimplexEngine::pickUpResults()
+{
+	getResults();
+	collateResults();
+	clearResults();
 }
 
 void SimplexEngine::shrink()
@@ -200,30 +209,15 @@ void SimplexEngine::shrink()
 		int ticket = sendJob(trial);
 		_points[i].tickets[ticket] = trial;
 	}
-
-	while (true)
-	{
-		double eval = FLT_MAX;
-		int ticket = awaitResult(&eval);
-		if (ticket < 0)
-		{
-			break;
-		}
-
-		for (size_t i = 0; i < _points.size(); i++)
-		{
-			if (_points[i].tickets.count(ticket) > 0)
-			{
-				SPoint &p = _points[i].tickets[ticket];
-				_points[i].vertex = p;
-			}
-		}
-	}
+	
+	getResults();
+	collateResults();
+	clearResults();
 }
 
-bool SimplexEngine::run()
+void SimplexEngine::run()
 {
-	if (_dims <= 0)
+	if (n() <= 0)
 	{
 		throw std::runtime_error("Nonsensical dimensions for SimplexEngine");
 	}
@@ -233,47 +227,43 @@ bool SimplexEngine::run()
 		throw std::runtime_error("Nonsensical maximum job count per vertex"
 		                         "for SimplexEngine");
 	}
-
+	
 	if (_steps.size() == 0)
 	{
-		throw std::runtime_error("No step sizes chosen for SimplexEngine");
+		_steps = std::vector<float>(n(), _step);
 	}
 
-	std::vector<float> empty = std::vector<float>(_dims, 0);
+	clearResults();
+
+	std::vector<float> empty = std::vector<float>(n(), 0);
 	sendJob(empty);
 	
-	double begin = FLT_MAX;
-	awaitResult(&begin);
+	getResults();
+	float begin = FLT_MAX;
+	findBestResult(&begin);
 
 	allocateResources();
 	sendStartingJobs();
-	singleCycle();
+	cycle();
 	
 	sendJob(bestPoint());
-	double end = FLT_MAX;
-	awaitResult(&end);
-	
-	return (end < begin);
+	getResults();
 }
 
-bool SimplexEngine::awaitResults()
+bool SimplexEngine::classifyResults()
 {
+	getResults();
+
 	bool changed = false;
 
-	double worst = _points[_points.size() - 1].eval;
-	double second_worst = _points[_points.size() - 2].eval;
-	double best = _points[0].eval;
-
-	while (true)
+	for (auto it = _scores.begin(); it != _scores.end(); it++)
 	{
-		double eval = FLT_MAX;
-		int ticket = awaitResult(&eval);
-		
-		if (ticket < 0)
-		{
-			break;
-		}
-		
+		int ticket = it->first;
+		int eval = it->second.score;
+
+		float worst = _points[_points.size() - 1].eval;
+		float second_worst = _points[_points.size() - 2].eval;
+		float best = _points[0].eval;
 
 		for (size_t i = 0; i < _points.size(); i++)
 		{
@@ -297,7 +287,7 @@ bool SimplexEngine::awaitResults()
 					TestPoint &w = _points[_points.size() - 1];
 					w.vertex = _points[i].tickets[ticket];
 					w.eval = eval;
-					
+
 					if (eval < best)
 					{
 						w.decision = ShouldExpand;
@@ -313,27 +303,23 @@ bool SimplexEngine::awaitResults()
 				break;
 			}
 		}
-	}
 
-	double new_worst = _points[_points.size() - 1].eval;
-	
-	if (new_worst >= worst)
-	{
-		_points[_points.size() - 1].decision = ShouldContract;
+		float new_worst = _points[_points.size() - 1].eval;
+
+		if (new_worst >= worst)
+		{
+			_points[_points.size() - 1].decision = ShouldContract;
+		}
+
+		if (changed)
+		{
+			findCentroid();
+		}
 	}
 	
-	if (changed)
-	{
-		findCentroid();
-	}
+	clearResults();
 	
 	return changed;
-}
-
-int SimplexEngine::sendJob(const SPoint &trial, bool force_update)
-{
-	// to be implemented downstream
-	return -1;
 }
 
 void SimplexEngine::sendStartingJobs()
@@ -341,9 +327,9 @@ void SimplexEngine::sendStartingJobs()
 	for (size_t i = 0; i < _points.size(); i++)
 	{
 		SPoint trial;
-		trial.resize(_dims);
+		trial.resize(n());
 
-		for (size_t j = 0; j < _dims; j++)
+		for (size_t j = 0; j < n(); j++)
 		{
 			float val = (i == j) ? _steps[i] : 0;
 			trial[j] = val;
@@ -365,9 +351,9 @@ void SimplexEngine::sendStartingJobs()
 
 SimplexEngine::SPoint SimplexEngine::scaleThrough(SPoint &p, SPoint &q, float k)
 {
-	SPoint ret = SPoint(_dims, 0.);
+	SPoint ret = SPoint(n(), 0.);
 
-	for (size_t i = 0; i < _dims; i++)
+	for (size_t i = 0; i < n(); i++)
 	{
 		ret[i] = q[i] + k * (p[i] - q[i]);
 	}
@@ -450,11 +436,6 @@ void SimplexEngine::sendDecidedJobs()
 		_points[i].decision = ShouldReflect;
 	}
 
-}
-
-int SimplexEngine::awaitResult(double *eval)
-{
-	return -1;
 }
 
 const SimplexEngine::SPoint &SimplexEngine::bestPoint() const

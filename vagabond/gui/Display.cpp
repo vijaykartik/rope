@@ -56,8 +56,6 @@ void Display::stop()
 
 void Display::recalculateAtoms()
 {
-	AlignmentTool tool(_atoms);
-	tool.run();
 	_atoms->recalculate();
 }
 
@@ -295,7 +293,7 @@ void Display::buttonPressed(std::string tag, Button *button)
 	}
 	else if (tag == "refine_positions")
 	{
-		_atoms->refinePositions();
+		_atoms->refinePositions(false, true);
 	}
 	else if (tag == "fft")
 	{
@@ -328,7 +326,8 @@ void Display::buttonPressed(std::string tag, Button *button)
 	}
 	else if (tag == "mechanics")
 	{
-		_atoms->mechanics();
+		_atoms->writeToFile("tmp.pdb");
+//		_atoms->mechanics();
 	}
 }
 

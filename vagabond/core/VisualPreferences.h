@@ -21,10 +21,11 @@
 
 #include "ResidueId.h"
 
-#include <json/json.hpp>
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 
 class Atom;
+class Instance;
 
 class VisualPreferences
 {
@@ -76,9 +77,10 @@ public:
 		_displayBallSticks.erase(_displayBallSticks.begin() + i);
 	}
 	
-	std::vector<Atom *> selectBallStickAtoms(std::vector<Atom *> &av);
+	std::vector<Atom *> selectBallStickAtoms(std::vector<Atom *> &av, 
+	                                         Instance *inst = nullptr);
 private:
-	bool isBallStickAtom(const Atom *a);
+	bool isBallStickAtom(const Atom *a, Instance *inst = nullptr);
 
 	bool _cAlphaTrace = true;
 	bool _ballAndStick = true;
@@ -99,8 +101,8 @@ inline void from_json(const json &j, VisualPreferences &value)
 {
 	value._cAlphaTrace = j["calpha"];
 	value._ballAndStick = j["ball_and_stick"];
-    std::vector<ResidueId> displayBallSticks = j.at("bas_residues");
-	value._displayBallSticks = displayBallSticks;
+	std::vector<ResidueId> dbs = j["bas_residues"];
+	value._displayBallSticks = dbs;
 }
 
 #endif

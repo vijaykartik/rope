@@ -35,8 +35,11 @@ MetadataView::~MetadataView()
 {
 	deleteObjects();
 
-	delete _md;
-	_md = nullptr;
+	if (!_md->isMaster())
+	{
+		delete _md;
+		_md = nullptr;
+	}
 }
 
 void MetadataView::setup()
@@ -118,8 +121,10 @@ void MetadataView::buttonPressed(std::string tag, Button *button)
 
 void MetadataView::sendObject(std::string tag, void *object)
 {
+	std::cout << "Sent: " << tag << std::endl;
 	std::string key = Button::tagEnd(tag, "__del_");
 	
+	std::cout << "Key: " << key << std::endl;
 	if (key.length())
 	{
 		_md->purgeKey(key);

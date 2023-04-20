@@ -59,7 +59,8 @@ AddEntity::AddEntity(Scene *prev, std::string str) : Scene(prev), AddObject(prev
 	_obj.setSequence(seq);
 }
 
-AddEntity::AddEntity(Scene *prev, Entity *ent) : Scene(prev), AddObject(prev, ent)
+AddEntity::AddEntity(Scene *prev, PolymerEntity *ent) : 
+Scene(prev), AddObject(prev, ent)
 {
 
 }
@@ -103,7 +104,7 @@ void AddEntity::setup()
 	
 	top += inc;
 
-	if (!_existing)
+	if (!_existing && _obj.hasSequence())
 	{
 		{
 			Text *t = new Text("Reference sequence:");
@@ -118,7 +119,7 @@ void AddEntity::setup()
 			addObject(t);
 		}
 	}
-	else
+	else if (_obj.hasSequence())
 	{
 		ImageButton *button = new ImageButton("assets/images/sequence.png", this);
 		button->resize(0.2);
@@ -142,7 +143,6 @@ void AddEntity::setup()
 			Text *t = new Text(str);
 			t->setCentre(0.5, 0.15);
 			t->resize(0.8);
-//			t->addAltTag("Models may contain multiple molecules of this entity");
 			addObject(t);
 		}
 
@@ -218,6 +218,7 @@ void AddEntity::setup()
 			addObject(text);
 		}
 
+		if (_obj.hasSequence())
 		{
 			ImageButton *b = new ImageButton("assets/images/phenylalanine.png", 
 			                                      this);
@@ -326,6 +327,7 @@ void AddEntity::buttonPressed(std::string tag, Button *button)
 	else if (tag == "refine")
 	{
 		SerialRefiner *refiner = new SerialRefiner(this, &_obj);
+		refiner->setJobType(rope::ThoroughRefine);
 		refiner->show();
 		return;
 	}

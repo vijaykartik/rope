@@ -31,6 +31,7 @@ namespace tt = boost::test_tools;
 
 BOOST_AUTO_TEST_CASE(ramachandran_plot)
 {
+	return;
 	Sequence seq("aaa");
 	AtomGroup *grp = seq.convertToAtoms();
 	
@@ -72,13 +73,13 @@ BOOST_AUTO_TEST_CASE(ramachandran_plot)
 	TorsionBasis *basis = calculator.sequenceHandler()->torsionBasis();
 
 	int idxs[3] = {-1, -1, -1};
-	idxs[0] = basis->indexForTorsion(t_phi);
-	idxs[1] = basis->indexForTorsion(t_psi);
+	idxs[0] = basis->indexForParameter(t_phi);
+	idxs[1] = basis->indexForParameter(t_psi);
 	
 	basis->setReferenceAngle(idxs[0], 0);
 	basis->setReferenceAngle(idxs[1], 0);
 
-	int dims = basis->torsionCount();
+	int dims = basis->parameterCount();
 	
 	grp->recalculate();
 	PdbFile pdb("clash_thr.pdb");

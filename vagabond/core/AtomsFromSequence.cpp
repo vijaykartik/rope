@@ -20,7 +20,6 @@
 #include "AtomGroup.h"
 #include "Sequence.h"
 #include "BondLength.h"
-#include "AlignmentTool.h"
 #include "Knotter.h"
 #include "PdbFile.h"
 #include "GeometryTable.h"
@@ -100,7 +99,7 @@ AtomGroup *AtomsFromSequence::atoms()
 			continue;
 		}
 		
-		t->setRefinedAngle(120.f);
+		t->setRefinedAngle(0.f);
 		if (t->isPeptideBond())
 		{
 			t->setRefinedAngle(180.f);

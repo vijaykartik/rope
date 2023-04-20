@@ -111,16 +111,46 @@ std::string AtomGraph::desc() const
 
 bool AtomGraph::operator<(const AtomGraph &other) const
 {
-	if (onlyHydrogens && !other.onlyHydrogens)
-	{
-//		return false;
-	}
-	if (!onlyHydrogens && other.onlyHydrogens)
-	{
-//		return true;
-	}
-
 	/* otherwise go for tinier branch points first */
 	return atom->atomNum() < other.atom->atomNum();
 }
 
+
+BondTorsion *AtomGraph::pertinentTorsion() const
+{
+	if (!prior || !(prior->prior))
+	{
+		return nullptr;
+	}
+	
+	AtomGraph *further = prior->prior;
+	
+	for (AtomGraph *child : further->children)
+	{
+		if (child->torsion)
+		{
+			return child->torsion;
+		}
+	}
+	
+	return nullptr;
+}
+
+BondTorsion *AtomGraph::controllingTorsion() const
+{
+	Atom *next = atom;
+	Atom *self = prior->atom;
+	Atom *grandparent = prior->grandparent;
+	Atom *parent = prior->parent;
+
+	if (next && self && parent && grandparent)
+	{
+		BondTorsion *torsion = self->findBondTorsion(next, self, 
+		                                             parent, 
+		                                             grandparent);
+
+		return torsion;
+	}
+
+	return nullptr;
+}

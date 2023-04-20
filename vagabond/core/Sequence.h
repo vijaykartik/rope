@@ -23,7 +23,9 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include "RopeTypes.h"
 #include "Residue.h"
+#include "ResidueTorsion.h"
 #include <vagabond/c4x/Angular.h>
 #include "IndexedSequence.h"
 
@@ -31,15 +33,6 @@ class Atom;
 class Entity;
 class AtomGroup;
 class SequenceComparison;
-
-namespace rope
-{
-	enum TorsionType
-	{
-		RefinedTorsions,
-		TemporaryTorsions,
-	};
-}
 
 typedef std::map<Residue *, Residue *> ResidueMap;
 
@@ -113,12 +106,17 @@ public:
 	/** converts entity master residue to local residue
 	 * 	@param master pointer to the Entity master residue
 	 * 	@return pointer to the corresponding local residue */
-	Residue *const local_residue(Residue *master) const;
+	Residue *const local_residue(Residue *const master) const;
 
 	/** converts local residue to entity master residue
 	 * 	@param local pointer to the corresponding local residue 
 	 * 	@return pointer to the Entity master residue */
-	Residue *master_residue(Residue *local) const;
+	Residue *master_residue(Residue *const local) const;
+	
+	
+	/* returns fragment xxSxx where S is central residue ID and the
+     * 	number of x on either side is determined by buffer */
+	Sequence fragment(ResidueId central, int buffer);
 	
 	/** residue number of the first residue in the sequence */
 	int firstNum()
@@ -179,7 +177,7 @@ public:
 
 	/** name in style t<id>:<desc> to torsion angle (if available) */
 	bool torsionByName(const std::string name, Residue **res);
-
+	
 	friend void to_json(json &j, const Sequence &value);
 	friend void from_json(const json &j, Sequence &value);
 
@@ -228,6 +226,14 @@ public:
 	void addAtomPositionHeaders(std::vector<Atom3DPosition> &headers);
 private:
 	void findSequence();
+
+	std::list<Residue>::iterator iterator(Residue &res)
+	{
+		return std::find_if(_residues.begin(), _residues.end(), 
+		                    [&res](const Residue &arg) { 
+                                           return arg.id() == res.id(); });
+	}
+	
 	
 	std::list<Residue> _residues;
 	std::list<Residue> _master;

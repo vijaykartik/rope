@@ -22,13 +22,14 @@
 #include "Toolkit.h"
 
 #include <vagabond/gui/elements/TextButton.h>
+#include <vagabond/core/EntityManager.h>
 #include <vagabond/core/Environment.h>
 
 EntityMenu::EntityMenu(Scene *prev) : ListView(prev)
 {
-	_manager = Environment::entityManager();
-//	_manager->checkModelsForReferences(Environment::modelManager());
-	_manager->Manager::setResponder(this);
+	_manager = Environment::entityManager()->forPolymers();
+	
+	Environment::modelManager()->Manager::setResponder(this);
 }
 
 EntityMenu::~EntityMenu()
@@ -48,7 +49,7 @@ void EntityMenu::buttonPressed(std::string tag, Button *button)
 	std::string id = Button::tagEnd(tag, "entity_");
 	if (id.length())
 	{
-		Entity *ent = _manager->entity(id);
+		PolymerEntity *ent = _manager->entity(id);
 		
 		AddEntity *view = new AddEntity(this, ent);
 		view->show();
@@ -71,7 +72,7 @@ Renderable *EntityMenu::getLine(int i)
 		t->setReturnTag("add_entity");
 		return t;
 	}
-	Entity &ent = _manager->object(i - 1);
+	PolymerEntity &ent = _manager->object(i - 1);
 
 	Box *b = new Box();
 	{

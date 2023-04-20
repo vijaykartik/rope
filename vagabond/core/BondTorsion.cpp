@@ -108,7 +108,7 @@ double BondTorsion::startingAngle()
 		return _angle;
 	}
 	
-	if (_refined)
+	if (_working)
 	{
 		return _refinedAngle;
 	}
@@ -242,3 +242,4 @@ bool BondTorsion::spansMultipleChains() const
 	
 	return false;
 }
+

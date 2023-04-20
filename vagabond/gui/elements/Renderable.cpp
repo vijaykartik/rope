@@ -3,7 +3,7 @@
 #include "Renderable.h"
 #include "SnowGL.h"
 #include "Window.h"
-#include "../../../commit.h"
+#include "config/config.h"
 #include "Library.h"
 #include <vagabond/utils/FileReader.h>
 #include <float.h>
@@ -1437,9 +1437,9 @@ void Renderable::triangulate()
 		addIndices(i23, i12, i2);
 	}
 	
-	calculateNormals();
-	
 	unlockMutex();
+	
+	calculateNormals();
 }
 
 void Renderable::setArbitrary(double x, double y, Alignment a)

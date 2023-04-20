@@ -215,14 +215,14 @@ BondSequence *BondSequenceHandler::acquireSequence(SequenceState state)
 	return seq;
 }
 
-const size_t BondSequenceHandler::torsionCount() const
+const size_t BondSequenceHandler::parameterCount() const
 {
 	if (_sequences.size() == 0)
 	{
 		return 0;
 	}
 	
-	return _sequences[0]->torsionBasis()->torsionCount();
+	return _sequences[0]->torsionBasis()->parameterCount();
 }
 
 TorsionBasis *BondSequenceHandler::torsionBasis() const
@@ -243,7 +243,7 @@ void BondSequenceHandler::imposeDepthLimits(int min, int max, int sidemax)
 	}
 }
 
-std::vector<bool> BondSequenceHandler::depthLimitMask() 
+std::vector<bool> BondSequenceHandler::activeParameterMask(size_t *programs) 
 {
 	std::vector<bool> mask;
 
@@ -252,7 +252,7 @@ std::vector<bool> BondSequenceHandler::depthLimitMask()
 		return mask;
 	}
 	
-	mask = _sequences[0]->atomMask();
+	mask = _sequences[0]->activeParameterMask(programs);
 
 	return mask;
 }

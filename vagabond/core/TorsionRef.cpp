@@ -26,7 +26,7 @@ TorsionRef::TorsionRef()
 
 }
 
-TorsionRef::TorsionRef(BondTorsion *tmp)
+TorsionRef::TorsionRef(Parameter *tmp)
 {
 	if (tmp == nullptr)
 	{
@@ -34,7 +34,7 @@ TorsionRef::TorsionRef(BondTorsion *tmp)
 	}
 
 	_desc = tmp->desc();
-	_torsion = tmp;
+	_parameter = tmp;
 	organiseDescriptions();
 }
 
@@ -74,6 +74,12 @@ void TorsionRef::housekeeping()
 	organiseDescriptions();
 }
 
+size_t TorsionRef::atomCount() const
+{
+	std::vector<std::string> splits = split(_desc, '-');
+	return splits.size();
+}
+
 std::string TorsionRef::atomName(int i) const
 {
 	std::vector<std::string> splits = split(_desc, '-');
@@ -82,7 +88,12 @@ std::string TorsionRef::atomName(int i) const
 
 bool TorsionRef::coversMainChain() const
 {
-	for (size_t i = 0; i < 4; i++)
+	if (isHyperParameter())
+	{
+		return true;
+	}
+
+	for (size_t i = 0; i < atomCount(); i++)
 	{
 		if (!Atom::isMainChain(atomName(i)))
 		{
@@ -91,5 +102,4 @@ bool TorsionRef::coversMainChain() const
 	}
 
 	return true;
-
 }

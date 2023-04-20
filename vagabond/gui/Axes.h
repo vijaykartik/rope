@@ -21,30 +21,33 @@
 
 #include <vagabond/gui/elements/IndexResponder.h>
 #include <vagabond/c4x/Cluster.h>
+#include <vagabond/core/Engine.h>
+#include <thread>
 
-class PlaneView;
 class Scene;
-class Molecule;
+class Instance;
 class TorsionCluster;
 class PositionalCluster;
+class ChemotaxisEngine;
+class ConfSpaceView;
 class RopeCluster;
 
-class Axes : public IndexResponder, public ButtonResponder
+class Axes : public IndexResponder, public ButtonResponder, public RunsEngine
 {
 public:
-	Axes(TorsionCluster *group, Molecule *m = nullptr);
-	Axes(PositionalCluster *group, Molecule *m = nullptr);
-	Axes(RopeCluster *group, Molecule *m = nullptr);
+	Axes(TorsionCluster *group, Instance *m = nullptr);
+	Axes(PositionalCluster *group, Instance *m = nullptr);
+	Axes(RopeCluster *group, Instance *m = nullptr);
 	~Axes();
 	
-	void setScene(Scene *scene)
+	void setScene(ConfSpaceView *scene)
 	{
 		_scene = scene;
 	}
 
 	virtual void interacted(int idx, bool hover, bool left = true);
 	virtual void reindex();
-	virtual void reorient(int i, Molecule *mol);
+	virtual void reorient(int i, Instance *mol);
 	virtual void click(bool left = true);
 	virtual bool mouseOver();
 	virtual void unmouseOver();
@@ -52,21 +55,16 @@ public:
 
 	virtual size_t requestedIndices();
 	
-	PlaneView *planeView()
-	{
-		return _pv;
-	}
-	
 	void takeOldAxes(Axes *old);
 
 	void buttonPressed(std::string tag, Button *button);
+	void backgroundPrioritise(std::string key);
+
+	virtual size_t parameterCount();
+	virtual int sendJob(const std::vector<float> &all);
 private:
-	void setAxisInPlane(int idx, bool plane);
 	std::vector<float> getMappedVector(int idx);
-	void cancelPlane();
-	bool startedPlane();
-	bool finishedPlane();
-	void preparePlane();
+	void prioritiseDirection(std::string key);
 	void route(int idx);
 	void initialise();
 
@@ -79,17 +77,22 @@ private:
 	RopeCluster *_cluster = nullptr;
 	TorsionCluster *_torsionCluster = nullptr;
 	PositionalCluster *_positionalCluster = nullptr;
-	Molecule *_molecule = nullptr;
-	Scene *_scene = nullptr;
+	Instance *_instance = nullptr;
+	ConfSpaceView *_scene = nullptr;
 	int _lastIdx = -1;
 	
-	Molecule *_targets[3];
-	PlaneView *_pv = nullptr;
+	Instance *_targets[3];
 	
 	bool _origin = false;
 
+	void stop();
+	std::thread *_worker = nullptr;
+	std::string _key;
+	ChemotaxisEngine *_engine = nullptr;
+
 	bool _planes[3];
 	std::vector<glm::vec3> _dirs;
+	
 };
 
 #endif
