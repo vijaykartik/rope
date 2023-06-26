@@ -119,6 +119,30 @@ BOOST_AUTO_TEST_CASE(area_from_exposure)
 	BOOST_TEST(calcArea4 == area4, tt::tolerance(1e-2f));
 }
 
+// check correctness of calculated z-slices
+BOOST_AUTO_TEST_CASE(z_slices)
+{
+	Atom a1, a2;
+	glm::vec3 pos1, pos2;
+	a1.setElementSymbol("O");
+	a2.setElementSymbol("O");
+	pos1 = glm::vec3(0.0f, 0.0f, 0.0f);
+	pos2 = glm::vec3(1.0f, 0.0f, 2.0f);
+	a1.setDerivedPosition(pos1);
+	a2.setDerivedPosition(pos2);
+	std::set<Atom *> nearAtoms = {&a2};
+
+	ContactSheet sheet;
+
+	sheet.calculateZSliceMap(&a1, nearAtoms);
+
+	std::map<Atom *, std::map<Atom *, std::pair<float, float> > > zSliceMap = sheet.getZSliceMap();
+	std::pair<float, float> zSlice1 = zSliceMap[&a1][&a2];
+	std::pair<float, float> zSlice2 = zSliceMap[&a2][&a1];
+	std::cout << "zSlice1: " << zSlice1.first << ", " << zSlice1.second << std::endl;
+	std::cout << "zSlice2: " << zSlice2.first << ", " << zSlice2.second << std::endl;
+}
+
 // check atom exposure for no neighbours
 BOOST_AUTO_TEST_CASE(atom_no_neighbours)
 {
