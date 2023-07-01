@@ -227,8 +227,8 @@ BOOST_AUTO_TEST_CASE(atom_small_overlap_neighbour)
 	Atom atom, atom2, atomControl;
 	glm::vec3 pos, pos2, posControl;
 	pos = glm::vec3(0.0f, 0.0f, 0.0f);
-	pos2 = glm::vec3(2.28f, 0.76f, 0.0f);
-	posControl = glm::vec3(sqrt(2.28*2.28 + 0.76*0.76), 0.0f, 0.0f);
+	pos2 = glm::vec3(4.0f, 0.76f, 0.0f);
+	posControl = glm::vec3(sqrt(4.0*4.0 + 0.76*0.76), 0.0f, 0.0f);
 	atom.setElementSymbol("O");
 	atom2.setElementSymbol("O");
 	atomControl.setElementSymbol("O");
@@ -273,8 +273,8 @@ BOOST_AUTO_TEST_CASE(atom_large_overlap_neighbour)
 	Atom atom, atom2, atomControl;
 	glm::vec3 pos, pos2, posControl;
 	pos = glm::vec3(0.0f, 0.0f, 0.0f);
-	pos2 = glm::vec3(0.152f, 0.152f, 0.0f);
-	posControl = glm::vec3(sqrt(0.152*0.152 + 0.152*0.152), 0.0f, 0.0f);
+	pos2 = glm::vec3(1.2f, 1.2f, 0.0f);
+	posControl = glm::vec3(sqrt(1.2*1.2 + 1.2*1.2), 0.0f, 0.0f);
 	atom.setElementSymbol("O");
 	atom2.setElementSymbol("O");
 	atomControl.setElementSymbol("O");
