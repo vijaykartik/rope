@@ -380,5 +380,6 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
 	BOOST_TEST(area == 29.0333f, tt::tolerance(1e-2f));
 }
