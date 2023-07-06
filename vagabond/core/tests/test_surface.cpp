@@ -26,6 +26,7 @@
 #include <gemmi/elem.hpp>
 #include "vagabond/utils/glm_import.h"
 #include "Atom.h"
+#include "CifFile.h"
 
 
 namespace tt = boost::test_tools;
@@ -383,3 +384,73 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 	std::cout << "area: " << area << std::endl;
 	BOOST_TEST(area == 29.0333f, tt::tolerance(1e-2f));
 }
+
+BOOST_AUTO_TEST_CASE(glycine_surface_area)
+{
+	std::string path = "../../../../../molecules/glycine.pdb";
+	CifFile geom = CifFile(path);
+	geom.parse();
+
+	AtomGroup *glycine = geom.atoms();
+
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(glycine->chosenAnchor()); 
+
+	calc.setup();
+	calc.start();
+	
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+
+	calc.submitJob(job);
+
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
+
+	BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f));
+}
+
+
+// BOOST_AUTO_TEST_CASE(two_oxygen_atoms_have_surface_area)
+// {
+// 	// oxygen atom Van der Waals radius is 1.52 Ang according to Google.
+// 	// volume: 4/3 * pi * r^3 is 14.7 Ang^3.
+// 	// surface: 4 * pi * r^2 is 29.0333 Ang^2.
+
+// 	Atom a, b;
+// 	a.setElementSymbol("O");
+// 	b.setElementSymbol("O");
+// 	glm::vec3 pos_a = glm::vec3(-1.52f, 0.0f, 0.0f);
+// 	glm::vec3 pos_b = glm::vec3(1.52f, 0.0f, 0.0f);
+
+// 	a.setDerivedPosition(pos_a);
+// 	b.setDerivedPosition(pos_b);
+	
+// 	AtomGroup grp;
+// 	grp += &a;
+// 	grp += &b;
+	
+// 	BondCalculator calc;
+// 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+// 	calc.addAnchorExtension(&a);
+// 	calc.addAnchorExtension(&b);
+	
+// 	calc.setup();
+// 	calc.start();
+	
+// 	Job job{};
+// 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+
+// 	calc.submitJob(job);
+
+// 	Result *r = calc.acquireResult();
+// 	calc.finish();
+	
+// 	float area = r->surface_area;
+// 	std::cout << "area: " << area << std::endl;
+// 	// BOOST_TEST(area < 2*29.0333f, tt::tolerance(1e-2f));
+// }
