@@ -387,31 +387,31 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 
 BOOST_AUTO_TEST_CASE(glycine_surface_area)
 {
-	std::string path = "../../../../../molecules/glycine.pdb";
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/GLY.cif";
 	CifFile geom = CifFile(path);
 	geom.parse();
-
+  
 	AtomGroup *glycine = geom.atoms();
-
 	BondCalculator calc;
 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
 	calc.addAnchorExtension(glycine->chosenAnchor()); 
-
+  
 	calc.setup();
 	calc.start();
-	
+
 	Job job{};
 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
-
+  
 	calc.submitJob(job);
-
+  
 	Result *r = calc.acquireResult();
 	calc.finish();
 	
 	float area = r->surface_area;
 	std::cout << "area: " << area << std::endl;
-
-	BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f));
+  
+	// BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f)); // this is not solvent accesible area
+	BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
 }
 
 
