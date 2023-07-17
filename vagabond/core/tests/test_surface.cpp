@@ -27,6 +27,7 @@
 #include "vagabond/utils/glm_import.h"
 #include "Atom.h"
 #include "CifFile.h"
+#include "PdbFile.h"
 
 
 namespace tt = boost::test_tools;
@@ -274,8 +275,8 @@ BOOST_AUTO_TEST_CASE(atom_large_overlap_neighbour)
 	Atom atom, atom2, atomControl;
 	glm::vec3 pos, pos2, posControl;
 	pos = glm::vec3(0.0f, 0.0f, 0.0f);
-	pos2 = glm::vec3(1.2f, 1.2f, 0.0f);
-	posControl = glm::vec3(sqrt(1.2*1.2 + 1.2*1.2), 0.0f, 0.0f);
+	pos2 = glm::vec3(1.0f, 1.0f, 0.0f);
+	posControl = glm::vec3(sqrt(1.0f*1.0f + 1.0f*1.0f), 0.0f, 0.0f);
 	atom.setElementSymbol("O");
 	atom2.setElementSymbol("O");
 	atomControl.setElementSymbol("O");
@@ -348,10 +349,10 @@ BOOST_AUTO_TEST_CASE(atom_full_overlap_neighbour)
 	calc.finish();
 }
 
-BOOST_AUTO_TEST_CASE(failing_Test)
-{
-	BOOST_TEST(1 == 2);
-}
+// BOOST_AUTO_TEST_CASE(failing_Test)
+// {
+// 	BOOST_TEST(1 == 2);
+// }
 
 BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 {
@@ -382,7 +383,8 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 	
 	float area = r->surface_area;
 	std::cout << "area: " << area << std::endl;
-	BOOST_TEST(area == 29.0333f, tt::tolerance(1e-2f));
+	// BOOST_TEST(area == 29.0333f, tt::tolerance(1e-2f)); // this is not solvent accesible area
+	BOOST_TEST(area == 103.5079f, tt::tolerance(1e-2f)); //solvent accessible area
 }
 
 BOOST_AUTO_TEST_CASE(glycine_surface_area)
@@ -414,6 +416,190 @@ BOOST_AUTO_TEST_CASE(glycine_surface_area)
 	BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
 }
 
+BOOST_AUTO_TEST_CASE(atp_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/ATP.cif";
+	CifFile geom = CifFile(path);
+	geom.parse();
+  
+	AtomGroup *atp = geom.atoms();
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(atp->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
+  
+	BOOST_TEST(area == 649.230f, tt::tolerance(3e-2f)); //solvent accessible area (PyMOL);
+}
+
+BOOST_AUTO_TEST_CASE(tyr_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/TYR.cif";
+	CifFile geom = CifFile(path);
+	geom.parse();
+  
+	AtomGroup *tyr = geom.atoms();
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(tyr->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
+  
+	// BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f)); // this is not solvent accesible area
+	BOOST_TEST(area == 372.816f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
+}
+
+BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb2h35.ent";
+	PdbFile pdb(path);
+	pdb.parse();
+	AtomGroup *hemoglobin = pdb.atoms();
+	// AtomGroup *hemoglobin;
+	// pdb.writeAtoms(hemoglobin,"hemoglobin");
+  
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(hemoglobin->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
+  
+	BOOST_TEST(area == 28211.436f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(insulin_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb3i40.ent";
+	PdbFile pdb(path);
+	pdb.parse();
+	AtomGroup *insulin = pdb.atoms();
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(insulin->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "area: " << area << std::endl;
+  
+	BOOST_TEST(area == 3383.559f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(time_glycine)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/GLY.cif";
+	CifFile geom = CifFile(path);
+	geom.parse();
+  
+	AtomGroup *glycine = geom.atoms();
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(glycine->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	//do 5 runs of repeating the code block 500 times and taking the average time and standard deviaton
+	std::vector<float> times;
+	std::vector<float> avgs;
+	std::vector<float> stdDevs;
+	std::cout << "TIMING GLYCINE SURFACE AREA CALCULATION" << std::endl;
+	for (int i = 0; i < 5; i++)
+	{
+		for (int j = 0; j < 500; j++)
+		{
+			auto start = std::chrono::high_resolution_clock::now();
+			calc.submitJob(job);
+			Result *r = calc.acquireResult();
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<float> duration = end - start;
+			times.push_back(duration.count());
+		}
+		float avg = 0.0f;
+		for (int i = 0; i < times.size(); i++)
+		{
+			avg += times[i];
+		}
+		avg = avg / times.size();
+		float stdDev = 0.0f;
+		for (int i = 0; i < times.size(); i++)
+		{
+			stdDev += pow(times[i] - avg, 2);
+		}
+		stdDev = sqrt(stdDev / times.size());
+		avgs.push_back(avg);
+		stdDevs.push_back(stdDev);
+		std::cout << "RUN " << i << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+	}
+	float avg = 0.0f;
+	for (int i = 0; i < avgs.size(); i++)
+	{
+		avg += avgs[i];
+	}
+	avg = avg / avgs.size();
+	float stdDev = 0.0f;
+	for (int i = 0; i < avgs.size(); i++)
+	{
+		stdDev += pow(avgs[i] - avg, 2);
+	}
+	stdDev = sqrt(stdDev / avgs.size());
+	std::cout << "TOTAL" << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+
+	calc.finish();
+	
+	// float area = r->surface_area;
+	// std::cout << "area: " << area << std::endl;
+  
+	// BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f));
+}
 
 // BOOST_AUTO_TEST_CASE(two_oxygen_atoms_have_surface_area)
 // {
