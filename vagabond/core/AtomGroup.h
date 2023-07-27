@@ -24,7 +24,7 @@
 #include <vector>
 #include <set>
 #include <thread>
-
+#include "RopeTypes.h"
 typedef Atom *AtomPtr;
 typedef std::vector<AtomPtr> AtomVector;
 
@@ -86,6 +86,7 @@ public:
 	Atom *atomByDesc(std::string desc) const;
 	AtomVector atomsWithName(std::string name) const;
 	Atom *firstAtomWithName(std::string name) const;
+	int isAtomAA(const ResidueId &id);
 	
 	void recalculate();
 	void mechanics();
@@ -175,6 +176,7 @@ public:
 	{
 		return _forceField;
 	}
+
 protected:
 	Atom *atom(int i) const
 	{
@@ -186,7 +188,7 @@ protected:
 private:
 	void findPossibleAnchors();
 
-	AtomVector _atoms;
+AtomVector _atoms;
 	AtomVector _anchors;
 	AtomVector _transformedAnchors;
 	
