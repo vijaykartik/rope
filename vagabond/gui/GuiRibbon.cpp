@@ -214,10 +214,18 @@ void GuiRibbon::prepareCylinder(int i)
 
 void GuiRibbon::prepareCylinder()
 {
-	for (int i = 1; i < (int)_bezier.size() - 1; i++)
-	{
-		prepareCylinder(i);
-	}
+	int is[] = {index - 1, index + 0, index + 1, index + 2};
+	
+	if (is[0] < 0) is[0] = 0;
+	if (is[2] >= _cAlphas.size()) is[2] = _cAlphas.size() - 1;
+	if (is[3] >= _cAlphas.size()) is[3] = _cAlphas.size() - 1;
+
+	glm::vec3 p1 = _idxPos[is[0]];
+	glm::vec3 p2 = _idxPos[is[1]];
+	glm::vec3 p3 = _idxPos[is[2]];
+	glm::vec3 p4 = _idxPos[is[3]];
+	
+	return GuiRepresentation::makeNew(p1, p2, p3, p4, true);
 }
 
 bool GuiRibbon::correct_indices(int *is, GuiRibbon::Watch &atoms)
@@ -375,9 +383,8 @@ void GuiRibbon::watchAtom(Atom *a)
 void GuiRibbon::convert()
 {
 	insertAtom(nullptr);
-	prepareBezier();
-	prepareCylinder();
-	forceRender(true, true);
+	convertToNew();
+	convertToCylinder();
 }
 
 void GuiRibbon::transplantCylinder(std::vector<Snow::Vertex> &cylinder, int start)
@@ -469,4 +476,17 @@ void GuiRibbon::updateSinglePosition(Atom *a, glm::vec3 &p)
 void GuiRibbon::updateMultiPositions(Atom *a, WithPos &wp)
 {
 	updateSinglePosition(a, wp.ave);
+}
+
+void GuiRibbon::convertToNew()
+{
+	std::vector<Snow::Vertex> vs = _vertices;
+	_vertices.clear();
+
+	for (int i = 1; i < (int)vs.size() - 2; i++)
+	{
+		std::vector<Snow::Vertex> next_set = newFrom(vs, i);
+		_vertices.reserve(_vertices.size() + next_set.size());
+		_vertices.insert(_vertices.end(), next_set.begin(), next_set.end());
+	}
 }
