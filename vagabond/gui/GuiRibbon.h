@@ -143,9 +143,6 @@ private:
 	std::vector<Vertex> verticesForCylinder(int i);
 	void prepareBezier();
 	void prepareBezier(int i);
-	void convertToCylinder(std::vector<Snow::Vertex> *vertices = nullptr);
-	void convertToBezier();
-	void convertToNew();
 	void insertAtom(Atom *a);
 
 	std::vector<Snow::Vertex> makeBezier(int index);

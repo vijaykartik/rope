@@ -214,18 +214,10 @@ void GuiRibbon::prepareCylinder(int i)
 
 void GuiRibbon::prepareCylinder()
 {
-	int is[] = {index - 1, index + 0, index + 1, index + 2};
-	
-	if (is[0] < 0) is[0] = 0;
-	if (is[2] >= _cAlphas.size()) is[2] = _cAlphas.size() - 1;
-	if (is[3] >= _cAlphas.size()) is[3] = _cAlphas.size() - 1;
-
-	glm::vec3 p1 = _idxPos[is[0]];
-	glm::vec3 p2 = _idxPos[is[1]];
-	glm::vec3 p3 = _idxPos[is[2]];
-	glm::vec3 p4 = _idxPos[is[3]];
-	
-	return GuiRepresentation::makeNew(p1, p2, p3, p4, true);
+	for (int i = 1; i < (int)_bezier.size() - 1; i++)
+	{
+		prepareCylinder(i);
+	}
 }
 
 bool GuiRibbon::correct_indices(int *is, GuiRibbon::Watch &atoms)
@@ -255,10 +247,12 @@ std::vector<glm::vec3> GuiRibbon::bezierSegment(glm::vec3 p1, glm::vec3 p2,
 {
 	std::vector<glm::vec3> points;
 	float t = 0;
+	glm::vec3 x_0 =p3-p1;
+    glm::vec3 x_1 =p4-p2;
 
 	for (int i = 0; i < POINTS_PER_BEZIER; i++)
 	{
-		glm::vec3 p = bezier(p1, p2, p3, p4, t);
+		glm::vec3 p = cubic(p1, p2, p3, p4, x_0, x_1, t);
 		t += 1 / (float)(POINTS_PER_BEZIER);
 		points.push_back(p);
 	}
@@ -286,7 +280,6 @@ void GuiRibbon::prepareBezier(int i)
 		ps[i] = _atoms[is[i]].pos;
 	}
 
-	control_points(&ps[0], ps[1], ps[2], &ps[3]);
 	std::vector<glm::vec3> segment = bezierSegment(ps[0], ps[1], 
 	                                               ps[2], ps[3]);
 
@@ -383,8 +376,9 @@ void GuiRibbon::watchAtom(Atom *a)
 void GuiRibbon::convert()
 {
 	insertAtom(nullptr);
-	convertToNew();
-	convertToCylinder();
+	prepareBezier();
+	prepareCylinder();
+	forceRender(true, true);
 }
 
 void GuiRibbon::transplantCylinder(std::vector<Snow::Vertex> &cylinder, int start)
@@ -445,7 +439,7 @@ void GuiRibbon::updateSinglePosition(Atom *a, glm::vec3 &p)
 
 	int fix = _atoms.index(a);
 	_atoms[a].pos = p;
-
+	std::cout << fix << std::endl;
 	for (int i = fix - 2; i < fix + 1; i++)
 	{
 		if (i < 0 || i >= (int)_atoms.size() - 1)
@@ -478,15 +472,3 @@ void GuiRibbon::updateMultiPositions(Atom *a, WithPos &wp)
 	updateSinglePosition(a, wp.ave);
 }
 
-void GuiRibbon::convertToNew()
-{
-	std::vector<Snow::Vertex> vs = _vertices;
-	_vertices.clear();
-
-	for (int i = 1; i < (int)vs.size() - 2; i++)
-	{
-		std::vector<Snow::Vertex> next_set = newFrom(vs, i);
-		_vertices.reserve(_vertices.size() + next_set.size());
-		_vertices.insert(_vertices.end(), next_set.begin(), next_set.end());
-	}
-}

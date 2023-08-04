@@ -68,9 +68,9 @@ protected:
 	                                     int idx);
 	glm::vec3 bezier(glm::vec3 p1, glm::vec3 p2, 
 	                 glm::vec3 p3, glm::vec3 p4, double t);
+	glm::vec3 cubic(glm::vec3 p1, glm::vec3 p2, 
+	                 glm::vec3 p3, glm::vec3 p4, glm::vec3 x_0, glm::vec3 x_1, float x);
 
-	std::vector<Snow::Vertex> newFrom(std::vector<Snow::Vertex> vs,
-	                                     int idx);
 	std::vector<Snow::Vertex> wireFrameToBezier(std::vector<Snow::Vertex> &vs,
 	                                            int buffer = 0);
 	GuiAtom *parent()
@@ -84,11 +84,6 @@ protected:
 	std::vector<Snow::Vertex> makeBezier(glm::vec3 p1, glm::vec3 p2,
 	                                     glm::vec3 p3, glm::vec3 p4,
 	                                     bool overwrite = false);
-	std::vector<Snow::Vertex> makeNew(glm::vec3 p1, glm::vec3 p2,
-	                                     glm::vec3 p3, glm::vec3 p4,
-	                                     bool overwrite = false);
-	
-	/*glm::vec3 newF(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 p4, double x);*/
 	ColourScheme *_scheme = new ColourScheme(Heat);
 private:
 	GuiAtom *_parent = nullptr;

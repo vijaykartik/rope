@@ -77,6 +77,12 @@ glm::vec3 GuiRepresentation::bezier(glm::vec3 p1, glm::vec3 p2,
 	return add;
 }
 
+glm::vec3 GuiRepresentation::cubic(glm::vec3 p1, glm::vec3 p2, 
+                                    glm::vec3 p3, glm::vec3 p4, glm::vec3 x_0, glm::vec3 x_1, float x)
+{
+	glm::vec3 add = (((p3-p2)*x) + p2 + (x_0 + p2 - p3)*(x-1)*(x-1)*x + (x_1+p2-p3)*(x-1)*x*x);                                              return add;
+}
+
 std::vector<Snow::Vertex>
 GuiRepresentation::bezierFrom(std::vector<Snow::Vertex> vs, int idx)
 {
@@ -184,61 +190,5 @@ void GuiRepresentation::addCylinderIndices(std::vector<Snow::Vertex> &vertices,
 	addIndex(indices, vertices, begin + 0);
 	addIndex(indices, vertices, begin + last + first);
 	addIndex(indices, vertices, begin + first);
-}
-
-std::vector<Snow::Vertex>
-GuiRepresentation::newFrom(std::vector<Snow::Vertex> vs, int idx)
-{
-	int is[] = {idx - 1, idx + 0, idx + 1, idx + 2};
-	if (is[0] < 0) is[0] = 0;
-	if (is[2] >= vs.size()) is[2] = vs.size() - 1;
-	if (is[3] >= vs.size()) is[3] = vs.size() - 1;
-
-	glm::vec3 p1 = vs[is[0]].pos;
-	glm::vec3 p2 = vs[is[1]].pos;
-	glm::vec3 p3 = vs[is[2]].pos;
-	glm::vec3 p4 = vs[is[3]].pos;
-
-	std::vector<Snow::Vertex> next_set;
-	next_set = GuiRepresentation::makeNew(p1, p2, p3, p4);
-	
-	for (Snow::Vertex &v : next_set)
-	{
-		v.color = vs[idx].color;
-	}
-
-	return next_set;
-}
-
-glm::vec3 newf(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 p4, glm::vec3 x_0, glm::vec3 x_1, float x)
-{
-	glm::vec3 add{};
-	add = (((p3-p2)*x) + p2 + (x_0 + p2 - p3)*(x-1)*(x-1)*x + (x_1+p2-p3)*(x-1)*x*x);
-
-	
-	return add;
-}
-
-std::vector<Snow::Vertex>
-GuiRepresentation::makeNew(glm::vec3 p1, glm::vec3 p2,
-                              glm::vec3 p3, glm::vec3 p4,
-                              bool overwrite)
-{
-	std::vector<Snow::Vertex> vs;
-
-	glm::vec3 x_0 =p3-p1;
-	glm::vec3 x_1 =p4-p2;
-
-	float limit = 0.99;
-	for (float x = 0; x <= limit; x += 0.01)
-	{
-
-		glm::vec3 p = newf(p1, p2, p3, p4, x_0, x_1, x);
-		Snow::Vertex v = new_vertex(p);
-
-		vs.push_back(v);
-	}
-
-	return vs;
 }
 
