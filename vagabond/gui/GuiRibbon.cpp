@@ -274,6 +274,7 @@ void GuiRibbon::prepareBezier(int i)
 		return;
 	}
 
+	std::cout << "i = "<< i << "\nps0 " << _atoms[is[0]].pos << "\nps1 " << _atoms[is[1]].pos << "\nps2 " << _atoms[is[2]].pos<< "\nps3 " << _atoms[is[3]].pos << std::endl;
 	glm::vec3 ps[4];
 	for (size_t i = 0; i < 4; i++)
 	{
@@ -439,14 +440,15 @@ void GuiRibbon::updateSinglePosition(Atom *a, glm::vec3 &p)
 
 	int fix = _atoms.index(a);
 	_atoms[a].pos = p;
-	std::cout << fix << std::endl;
-	for (int i = fix - 2; i < fix + 1; i++)
+	for (int i = fix-3; i < fix+3; i++)
 	{
 		if (i < 0 || i >= (int)_atoms.size() - 1)
 		{
 			continue;
 		}
 
+	
+		std::cout << "a = " << a->desc() << "	fix = " << fix <<	"	" << _atoms[i].pos << std::endl;
 		prepareBezier(i);
 
 		int start = _bezier[i].next_idx;
