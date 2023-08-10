@@ -18,8 +18,10 @@
 
 #include "GuiBalls.h"
 #include "GuiBond.h"
+//#include "PointyView.h"
 
 #include <vagabond/gui/elements/Icosahedron.h>
+#include "ClusterView.h"
 
 #include <vagabond/core/matrix_functions.h>
 #include <vagabond/core/Atom.h>
@@ -157,6 +159,7 @@ void GuiBalls::watchAtom(Atom *a)
 
 	_atomPos[a] = a->initialPosition();
 	_atomIndex[a] = index;
+	_indexAtom[index] = a;
 }
 
 void GuiBalls::watchBonds(AtomGroup *ag)
@@ -199,7 +202,7 @@ void GuiBalls::setMulti(bool m)
 		_bonds->setDisabled(false);
 		_bonds->setAlpha(1.f);
 	}
-	else
+#include <vagabond/gui/elements/FloatingText.h>	else
 	{
 		setAlpha(1.f);
 		_bonds->setDisabled(true);
@@ -210,4 +213,70 @@ void GuiBalls::setMulti(bool m)
 void GuiBalls::finishUpdate()
 {
 	_bonds->forceRender(true, true);
+	//_text->forceRender(true, true);
 }
+
+void GuiBalls::interacted(int rawidx, bool hover, bool left)
+{
+	if (_text != nullptr)
+	{
+		removeObject(_text);
+		delete _text;
+		_text = nullptr;
+	}
+
+	if (rawidx < 0 || rawidx >= _vertices.size())
+	{
+		return;
+	}
+
+
+	std::string str = _indexAtom[rawidx/verticesPerAtom()]->atomName();
+
+	FloatingText *ft = new FloatingText(str);
+	ft->setPosition(_vertices[rawidx].pos);
+
+	addObject(ft);
+	_text = ft;
+
+}
+
+void GuiBalls::reindex()
+{
+	size_t offset = indexOffset();
+	for (size_t i = 0; i < vertexCount(); i++)
+	{
+		/* in the case of multiple responders */
+		_vertices[i].extra[0] = i + offset + 1.5;
+	}
+}
+
+/*void GuiBalls::makePoints()
+{
+	if (_atomIndex == nullptr)
+	{
+		return;
+	}
+
+	size_t count = _cx->pointCount();
+	_vertices.reserve(count);
+	_indices.reserve(count);
+
+	for (size_t i = 0; i < count; i++)
+	{
+		if (!_cx->objectGroup()->object(i)->displayable())
+		{
+			continue;
+		}
+
+		glm::vec3 v = _cx->pointForDisplay(i);
+
+		_point2Index[vertexCount()] = i;
+
+		addPoint(v, 0);
+	}
+
+	std::cout << "Vertices: " << vertexCount() << std::endl;
+
+	reindex();
+}*/

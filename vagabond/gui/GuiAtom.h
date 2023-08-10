@@ -4,6 +4,7 @@
 
 #include <thread>
 #include <vagabond/gui/elements/SimplePolygon.h>
+#include <vagabond/gui/elements/IndexResponder.h>
 #include <vagabond/core/Atom.h>
 #include <atomic>
 
@@ -20,7 +21,9 @@ class VisualPreferences;
 
 class Atom;
 
-class GuiAtom : public SimplePolygon
+class GuiAtom :
+//public SimplePolygon,
+public IndexResponder
 {
 public:
 	GuiAtom();
@@ -47,6 +50,12 @@ public:
 	void setDisableRibbon(bool dis);
 
 	virtual void render(SnowGL *gl);
+
+	virtual size_t requestedIndices()
+	{
+		return _atoms.size();
+	}
+
 
 	void applyVisuals(VisualPreferences *vp, Instance *inst = nullptr);
 private:

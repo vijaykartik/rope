@@ -20,6 +20,7 @@
 #define __vagabond__GuiBalls__
 
 #include "GuiRepresentation.h"
+#include <vagabond/gui/elements/FloatingText.h>
 
 class GuiAtom;
 class GuiBond;
@@ -34,6 +35,9 @@ public:
 	void watchBonds(AtomGroup *ag);
 
 	void setMulti(bool m);
+	virtual void interacted(int rawidx, bool hover, bool left = true);
+	virtual void reindex();
+//	virtual void makePoints();
 
 	virtual void updateSinglePosition(Atom *a, glm::vec3 &p);
 	virtual void updateMultiPositions(Atom *a, WithPos &wp);
@@ -52,10 +56,12 @@ private:
 	void colourByElement(std::string ele);
 	void setPosition(glm::vec3 position);
 
+	FloatingText *_text = nullptr;
 	Renderable *_template = nullptr;
 	GuiBond *_bonds = nullptr;
 
 	std::map<Atom *, int> _atomIndex;
+	std::map<int, Atom *> _indexAtom;
 	std::map<Atom *, glm::vec3> _atomPos;
 	
 	bool _multi = false;
