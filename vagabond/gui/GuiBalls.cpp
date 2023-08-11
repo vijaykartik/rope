@@ -21,7 +21,7 @@
 //#include "PointyView.h"
 
 #include <vagabond/gui/elements/Icosahedron.h>
-#include "ClusterView.h"
+//#include "ClusterView.h"
 
 #include <vagabond/core/matrix_functions.h>
 #include <vagabond/core/Atom.h>
@@ -202,7 +202,7 @@ void GuiBalls::setMulti(bool m)
 		_bonds->setDisabled(false);
 		_bonds->setAlpha(1.f);
 	}
-#include <vagabond/gui/elements/FloatingText.h>	else
+	else
 	{
 		setAlpha(1.f);
 		_bonds->setDisabled(true);
@@ -231,7 +231,7 @@ void GuiBalls::interacted(int rawidx, bool hover, bool left)
 	}
 
 
-	std::string str = _indexAtom[rawidx/verticesPerAtom()]->atomName();
+	std::string str = "test" /*_indexAtom[rawidx/verticesPerAtom()]->atomName()*/;
 
 	FloatingText *ft = new FloatingText(str);
 	ft->setPosition(_vertices[rawidx].pos);
