@@ -382,7 +382,7 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "O-atom area: " << area << std::endl;
 	// BOOST_TEST(area == 29.0333f, tt::tolerance(1e-2f)); // this is not solvent accesible area
 	BOOST_TEST(area == 103.5079f, tt::tolerance(1e-2f)); //solvent accessible area
 }
@@ -410,7 +410,7 @@ BOOST_AUTO_TEST_CASE(glycine_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "glycine area: " << area << std::endl;
   
 	// BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f)); // this is not solvent accesible area
 	BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
@@ -439,7 +439,7 @@ BOOST_AUTO_TEST_CASE(atp_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "atp area: " << area << std::endl;
   
 	BOOST_TEST(area == 649.230f, tt::tolerance(3e-2f)); //solvent accessible area (PyMOL);
 }
@@ -467,24 +467,94 @@ BOOST_AUTO_TEST_CASE(tyr_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "tyr area: " << area << std::endl;
   
 	// BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f)); // this is not solvent accesible area
 	BOOST_TEST(area == 372.816f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
 }
 
-BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
+// BOOST_AUTO_TEST_CASE(DT_surface_area)
+// {
+// 	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/1544027.cif";
+// 	CifFile geom = CifFile(path);
+// 	geom.parse();
+  
+// 	AtomGroup *DT = geom.atoms();
+// 	BondCalculator calc;
+// 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+// 	calc.addAnchorExtension(DT->chosenAnchor()); 
+  
+// 	calc.setup();
+// 	calc.start();
+
+// 	Job job{};
+// 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+// 	calc.submitJob(job);
+  
+// 	Result *r = calc.acquireResult();
+// 	calc.finish();
+	
+// 	float area = r->surface_area;
+// 	std::cout << "DT area: " << area << std::endl;
+  
+// 	// BOOST_TEST(area == 95.367f, tt::tolerance(1e-2f)); // this is not solvent accesible area
+// 	BOOST_TEST(area == 496.514f, tt::tolerance(1e-2f)); //solvent accessible area (PyMOL);
+// }
+
+// BOOST_AUTO_TEST_CASE(cya_surface_area)
+// {
+// 	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/DT.cif";
+// 	PdbFile pdb(path);
+// 	pdb.parse();
+
+// 	AtomGroup *cya = pdb.atoms();
+//   std::cout << "\ncya atoms number: " << cya->size() << std::endl;
+
+// 	std::vector<AtomGroup *> subGroups = cya->connectedGroups();
+
+// 	BondCalculator calc;
+// 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+// 	for (AtomGroup *group : subGroups)
+// 	{
+// 		calc.addAnchorExtension(group->chosenAnchor());
+// 	}
+  
+// 	calc.setup();
+// 	calc.start();
+
+// 	Job job{};
+// 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+// 	calc.submitJob(job);
+  
+// 	Result *r = calc.acquireResult();
+// 	calc.finish();
+	
+// 	float area = r->surface_area;
+// 	std::cout << "cya area: " << area << std::endl;
+  
+// 	BOOST_TEST(area == 468.601f, tt::tolerance(1e-2f));
+// }
+
+BOOST_AUTO_TEST_CASE(exanatide_surface_area)
 {
-	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb2h35.ent";
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/7mll.pdb";
 	PdbFile pdb(path);
 	pdb.parse();
-	AtomGroup *hemoglobin = pdb.atoms();
-	// AtomGroup *hemoglobin;
-	// pdb.writeAtoms(hemoglobin,"hemoglobin");
-  
+
+	AtomGroup *exanatide = pdb.atoms();
+  std::cout << "\nexanatide atoms number: " << exanatide->size() << std::endl;
+
+	std::vector<AtomGroup *> subGroups = exanatide->connectedGroups();
+
 	BondCalculator calc;
 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
-	calc.addAnchorExtension(hemoglobin->chosenAnchor()); 
+	// calc.addAnchorExtension(insulin->chosenAnchor()); 
+	for (AtomGroup *group : subGroups)
+	{
+		calc.addAnchorExtension(group->chosenAnchor());
+	}
   
 	calc.setup();
 	calc.start();
@@ -498,9 +568,45 @@ BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "exanatide area: " << area << std::endl;
   
-	BOOST_TEST(area == 28211.436f, tt::tolerance(1e-2f));
+	BOOST_TEST(area == 3180.258f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(noPPalpha_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/8g0x.pdb";
+	PdbFile pdb(path);
+	pdb.parse();
+
+	AtomGroup *noPPalpha = pdb.atoms();
+  std::cout << "\noPPalpha atoms number: " << noPPalpha->size() << std::endl;
+
+	std::vector<AtomGroup *> subGroups = noPPalpha->connectedGroups();
+
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	// calc.addAnchorExtension(insulin->chosenAnchor()); 
+	for (AtomGroup *group : subGroups)
+	{
+		calc.addAnchorExtension(group->chosenAnchor());
+	}
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "noPPalpha area: " << area << std::endl;
+  
+	BOOST_TEST(area == 3177.264f, tt::tolerance(1e-2f));
 }
 
 BOOST_AUTO_TEST_CASE(insulin_surface_area)
@@ -508,10 +614,18 @@ BOOST_AUTO_TEST_CASE(insulin_surface_area)
 	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb3i40.ent";
 	PdbFile pdb(path);
 	pdb.parse();
+
 	AtomGroup *insulin = pdb.atoms();
+  std::cout << "\nInsulin atoms number: " << insulin->size() << std::endl;
+
+	std::vector<AtomGroup *> subGroups = insulin->connectedGroups();
+
 	BondCalculator calc;
 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
-	calc.addAnchorExtension(insulin->chosenAnchor()); 
+	for (AtomGroup *group : subGroups)
+	{
+		calc.addAnchorExtension(group->chosenAnchor());
+	}
   
 	calc.setup();
 	calc.start();
@@ -525,9 +639,110 @@ BOOST_AUTO_TEST_CASE(insulin_surface_area)
 	calc.finish();
 	
 	float area = r->surface_area;
-	std::cout << "area: " << area << std::endl;
+	std::cout << "insulin area: " << area << std::endl;
   
 	BOOST_TEST(area == 3383.559f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(lysozme_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/1gwd.pdb";
+	PdbFile pdb(path);
+	pdb.parse();
+
+	AtomGroup *lysozyme = pdb.atoms();
+  std::cout << "\nlysozyme atoms number: " << lysozyme->size() << std::endl;
+
+	std::vector<AtomGroup *> subGroups = lysozyme->connectedGroups();
+
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	// calc.addAnchorExtension(lysozyme->chosenAnchor()); 
+	for (AtomGroup *group : subGroups)
+	{
+		calc.addAnchorExtension(group->chosenAnchor());
+	}
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "lysozyme area: " << area << std::endl;
+  
+	BOOST_TEST(area == 6516.170f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb2h35.ent";
+	PdbFile pdb(path);
+	pdb.parse();
+
+	AtomGroup *hemoglobin = pdb.atoms();
+	std::vector<AtomGroup *> subGroups = hemoglobin->connectedGroups();
+	
+	std::cout << "\nHemoglobin atoms number: " << hemoglobin->size() << std::endl;
+	// AtomGroup *hemoglobin;
+	// pdb.writeAtoms(hemoglobin,"hemoglobin");
+  
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	for (AtomGroup *group : subGroups)
+		{
+			calc.addAnchorExtension(group->chosenAnchor());
+		}
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "hemoglobin area: " << area << std::endl;
+  
+	BOOST_TEST(area == 28211.436f, tt::tolerance(1e-2f));
+}
+
+BOOST_AUTO_TEST_CASE(albumin_surface_area)
+{
+	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/pdb1e78.ent";
+	PdbFile pdb(path);
+	pdb.parse();
+	AtomGroup *albumin = pdb.atoms();
+  
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	calc.addAnchorExtension(albumin->chosenAnchor()); 
+  
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	calc.submitJob(job);
+  
+	Result *r = calc.acquireResult();
+	calc.finish();
+	
+	float area = r->surface_area;
+	std::cout << "albumin area: " << area << std::endl;
+  
+	BOOST_TEST(area == 56982.762f, tt::tolerance(1e-2f));
 }
 
 BOOST_AUTO_TEST_CASE(time_glycine)
@@ -591,7 +806,7 @@ BOOST_AUTO_TEST_CASE(time_glycine)
 		stdDev += pow(avgs[i] - avg, 2);
 	}
 	stdDev = sqrt(stdDev / avgs.size());
-	std::cout << "TOTAL" << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+	std::cout << "TOTAL" << "\t" << "run avg: " << avg << "\t" << "run stdDev: " << stdDev << std::endl;
 
 	calc.finish();
 	
