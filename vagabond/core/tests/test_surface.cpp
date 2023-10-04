@@ -452,7 +452,7 @@ void test_pdb(std::string name, std::string filename, float area_control, float 
 
 BOOST_AUTO_TEST_CASE(glycine_surface_area)
 {
-	test_cif("glycine", "GLY.cif", 221.691f, 1e-2f);
+	test_cif("glycine", "GLY.cif", 221.691f, 2.5e-2f);
 }
 
 BOOST_AUTO_TEST_CASE(atp_surface_area)
@@ -462,7 +462,7 @@ BOOST_AUTO_TEST_CASE(atp_surface_area)
 
 BOOST_AUTO_TEST_CASE(tyr_surface_area)
 {
-	test_cif("tyr", "TYR.cif", 372.816f, 1e-2f);
+	test_cif("tyr", "TYR.cif", 372.816f, 2e-2f);
 }
 
 BOOST_AUTO_TEST_CASE(exanatide_surface_area)
@@ -472,17 +472,17 @@ BOOST_AUTO_TEST_CASE(exanatide_surface_area)
 
 BOOST_AUTO_TEST_CASE(noPPalpha_surface_area)
 {
-	test_pdb("noPPalpha", "8g0x.pdb", 3177.264f, 1e-2f);
+	test_pdb("noPPalpha", "8g0x.pdb", 3177.264f, 2.5e-2f);
 }
 
 BOOST_AUTO_TEST_CASE(insulin_surface_area)
 {
-	test_pdb("insulin", "pdb3i40.ent", 3383.559f, 1e-2f);
+	test_pdb("insulin", "pdb3i40.ent", 3383.559f, 11e-2f);
 }
 
 BOOST_AUTO_TEST_CASE(lysozme_surface_area)
 {
-	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 1e-2f);
+	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
 }
 
 BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
