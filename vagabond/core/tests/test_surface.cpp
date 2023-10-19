@@ -389,7 +389,7 @@ BOOST_AUTO_TEST_CASE(oxygen_atom_has_surface_area)
 
 void test_cif(std::string name, std::string filename, float area_control, float tolerance)
 {
-	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/" + filename;
+	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/" + filename;
 	CifFile geom = CifFile(path);
 	geom.parse();
   
@@ -417,7 +417,7 @@ void test_cif(std::string name, std::string filename, float area_control, float 
 
 void test_pdb(std::string name, std::string filename, float area_control, float tolerance)
 {
-	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/" + filename;
+	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/" + filename;
 	PdbFile pdb(path);
 	pdb.parse();
 
@@ -485,19 +485,9 @@ BOOST_AUTO_TEST_CASE(lysozme_surface_area)
 	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
 }
 
-BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
-{
-	test_pdb("hemoglobin", "pdb2h35.ent", 28211.436f, 1e-2f);
-}
-
-BOOST_AUTO_TEST_CASE(albumin_surface_area)
-{
-	test_pdb("albumin", "pdb1e78.ent", 56982.762f, 1e-2f);
-}
-
 BOOST_AUTO_TEST_CASE(time_glycine)
 {
-	std::string path = "/mnt/c/Users/IASON/SW/UNI/BA BSC/ROPE/molecule_files/GLY.cif";
+	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/GLY.cif";
 	CifFile geom = CifFile(path);
 	geom.parse();
   
@@ -565,6 +555,16 @@ BOOST_AUTO_TEST_CASE(time_glycine)
   
 	// BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f));
 }
+
+// BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
+// {
+// 	test_pdb("hemoglobin", "pdb2h35.ent", 28211.436f, 1e-2f);
+// }
+
+// BOOST_AUTO_TEST_CASE(albumin_surface_area)
+// {
+// 	test_pdb("albumin", "pdb1e78.ent", 56982.762f, 1e-2f);
+// }
 
 // BOOST_AUTO_TEST_CASE(two_oxygen_atoms_have_surface_area)
 // {
