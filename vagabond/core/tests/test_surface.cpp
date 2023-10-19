@@ -480,10 +480,6 @@ BOOST_AUTO_TEST_CASE(insulin_surface_area)
 	test_pdb("insulin", "pdb3i40.ent", 3383.559f, 11e-2f);
 }
 
-BOOST_AUTO_TEST_CASE(lysozme_surface_area)
-{
-	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
-}
 
 BOOST_AUTO_TEST_CASE(time_glycine)
 {
@@ -506,7 +502,7 @@ BOOST_AUTO_TEST_CASE(time_glycine)
 	std::vector<float> times;
 	std::vector<float> avgs;
 	std::vector<float> stdDevs;
-	std::cout << "TIMING GLYCINE SURFACE AREA CALCULATION" << std::endl;
+	std::cout << "\nTIMING GLYCINE SURFACE AREA CALCULATION" << std::endl;
 	for (int i = 0; i < 5; i++)
 	{
 		for (int j = 0; j < 500; j++)
@@ -549,11 +545,81 @@ BOOST_AUTO_TEST_CASE(time_glycine)
 	std::cout << "TOTAL" << "\t" << "run avg: " << avg << "\t" << "run stdDev: " << stdDev << std::endl;
 
 	calc.finish();
-	
-	// float area = r->surface_area;
-	// std::cout << "area: " << area << std::endl;
+}
+
+BOOST_AUTO_TEST_CASE(time_lysozyme)
+{
+	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/1gwd.pdb";
+	PdbFile pdb(path);
+	pdb.parse();
   
-	// BOOST_TEST(area == 221.691f, tt::tolerance(1e-2f));
+	AtomGroup *lysozyme = pdb.atoms();
+	std::vector<AtomGroup *> subGroups = lysozyme->connectedGroups();
+
+	BondCalculator calc;
+	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+	for (AtomGroup *group : subGroups)
+	{
+		calc.addAnchorExtension(group->chosenAnchor());
+	}
+	calc.setup();
+	calc.start();
+
+	Job job{};
+	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+	//do 5 runs of repeating the code block 10 times and taking the average time and standard deviaton
+	std::vector<float> times;
+	std::vector<float> avgs;
+	std::vector<float> stdDevs;
+	std::cout << "\nTIMING LYSOZYME SURFACE AREA CALCULATION" << std::endl;
+	for (int i = 0; i < 5; i++)
+	{
+		for (int j = 0; j < 5; j++)
+		{
+			auto start = std::chrono::high_resolution_clock::now();
+			calc.submitJob(job);
+			Result *r = calc.acquireResult();
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<float> duration = end - start;
+			times.push_back(duration.count());
+		}
+		float avg = 0.0f;
+		for (int i = 0; i < times.size(); i++)
+		{
+			avg += times[i];
+		}
+		avg = avg / times.size();
+		float stdDev = 0.0f;
+		for (int i = 0; i < times.size(); i++)
+		{
+			stdDev += pow(times[i] - avg, 2);
+		}
+		stdDev = sqrt(stdDev / times.size());
+		avgs.push_back(avg);
+		stdDevs.push_back(stdDev);
+		std::cout << "RUN " << i << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+	}
+	float avg = 0.0f;
+	for (int i = 0; i < avgs.size(); i++)
+	{
+		avg += avgs[i];
+	}
+	avg = avg / avgs.size();
+	float stdDev = 0.0f;
+	for (int i = 0; i < avgs.size(); i++)
+	{
+		stdDev += pow(avgs[i] - avg, 2);
+	}
+	stdDev = sqrt(stdDev / avgs.size());
+	std::cout << "TOTAL" << "\t" << "run avg: " << avg << "\t" << "run stdDev: " << stdDev << std::endl;
+
+	calc.finish();
+}
+
+BOOST_AUTO_TEST_CASE(lysozyme_surface_area)
+{
+	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
 }
 
 // BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
