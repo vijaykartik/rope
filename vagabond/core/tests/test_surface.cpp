@@ -401,6 +401,7 @@ void test_cif(std::string name, std::string filename, float area_control, float 
 	calc.setup();
 	calc.start();
 
+	std::chrono::_V2::system_clock::time_point start = std::chrono::high_resolution_clock::now();
 	Job job{};
 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
   
@@ -408,9 +409,11 @@ void test_cif(std::string name, std::string filename, float area_control, float 
   
 	Result *r = calc.acquireResult();
 	calc.finish();
-	
+	std::chrono::_V2::system_clock::time_point end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> duration = end - start;
 	float area = r->surface_area;
 	std::cout << name << " area: " << area << std::endl;
+	std::cout << "time: " << duration.count() << std::endl;
   
 	BOOST_TEST(area == area_control, tt::tolerance(tolerance)); //solvent accessible area (PyMOL);
 }
@@ -435,7 +438,7 @@ void test_pdb(std::string name, std::string filename, float area_control, float 
 	
 	calc.setup();
 	calc.start();
-
+	std::chrono::_V2::system_clock::time_point start = std::chrono::high_resolution_clock::now();
 	Job job{};
 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
 
@@ -443,12 +446,15 @@ void test_pdb(std::string name, std::string filename, float area_control, float 
 
 	Result *r = calc.acquireResult();
 	calc.finish();
-
+	std::chrono::_V2::system_clock::time_point end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> duration = end - start;
 	float area = r->surface_area;
 	std::cout << name << " area: " << area << std::endl;
+	std::cout << "time: " << duration.count() << std::endl;
 
 	BOOST_TEST(area == area_control, tt::tolerance(tolerance));
 }
+
 
 BOOST_AUTO_TEST_CASE(glycine_surface_area)
 {
@@ -480,6 +486,10 @@ BOOST_AUTO_TEST_CASE(insulin_surface_area)
 	test_pdb("insulin", "pdb3i40.ent", 3383.559f, 11e-2f);
 }
 
+BOOST_AUTO_TEST_CASE(lysozyme_surface_area)
+{
+	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
+}
 
 BOOST_AUTO_TEST_CASE(time_glycine)
 {
@@ -617,10 +627,6 @@ BOOST_AUTO_TEST_CASE(time_lysozyme)
 	calc.finish();
 }
 
-BOOST_AUTO_TEST_CASE(lysozyme_surface_area)
-{
-	test_pdb("lysozyme", "1gwd.pdb", 6516.170f, 12e-2f);
-}
 
 // BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
 // {
