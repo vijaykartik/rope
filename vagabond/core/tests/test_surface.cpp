@@ -24,7 +24,6 @@
 #include <vagabond/core/engine/SurfaceAreaHandler.h>
 #include <vagabond/core/engine/AreaMeasurer.h>
 #include <gemmi/elem.hpp>
-#include <iomanip>
 #include "vagabond/utils/glm_import.h"
 #include "Atom.h"
 #include "CifFile.h"
@@ -403,8 +402,6 @@ void test_cif(std::string name, std::string filename, float area_control, float 
 	calc.start();
 
 	std::chrono::_V2::system_clock::time_point start = std::chrono::high_resolution_clock::now();
-  TimerSurfaceArea::getInstance().timing = true;
-
 	Job job{};
 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
   
@@ -412,15 +409,11 @@ void test_cif(std::string name, std::string filename, float area_control, float 
   
 	Result *r = calc.acquireResult();
 	calc.finish();
-	
 	std::chrono::_V2::system_clock::time_point end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float> duration = end - start;
-  float calcTime = TimerSurfaceArea::getInstance().times[0].count();
-
 	float area = r->surface_area;
 	std::cout << name << " area: " << area << std::endl;
-	std::cout << std::left << std::setw(11) << "time: " << duration.count() << std::endl;
-	std::cout << "calc time: " << calcTime << std::endl;
+	std::cout << "time: " << duration.count() << std::endl;
   
 	BOOST_TEST(area == area_control, tt::tolerance(tolerance)); //solvent accessible area (PyMOL);
 }
@@ -435,289 +428,46 @@ void test_pdb(std::string name, std::string filename, float area_control, float 
 	std::cout << "\n" << name << " atoms number: " << atomgroup->size() << std::endl;
 
 	std::vector<AtomGroup *> subGroups = atomgroup->connectedGroups();
-
+  std::cout << "subgroups number: " << subGroups.size() << std::endl;
 	BondCalculator calc;
 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
 	for (AtomGroup *group : subGroups)
 	{
 		calc.addAnchorExtension(group->chosenAnchor());
 	}
-	
+	std::cout << "set pipeline" << std::endl;
 	calc.setup();
+	std::cout << "setup" << std::endl;
 	calc.start();
+	std::cout << "start" << std::endl;
 	std::chrono::_V2::system_clock::time_point start = std::chrono::high_resolution_clock::now();
-	TimerSurfaceArea::getInstance().timing = true;
-
-
 	Job job{};
+	std::cout << "job" << std::endl;
 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
-
+	std::cout << "job type" << std::endl;
+	std::chrono::_V2::system_clock::time_point job_request = std::chrono::high_resolution_clock::now();
 	calc.submitJob(job);
-
+	std::cout << "job submit" << std::endl;
+	std::chrono::_V2::system_clock::time_point job_submit = std::chrono::high_resolution_clock::now();
 	Result *r = calc.acquireResult();
+	std::cout << "job acquire" << std::endl;
+	std::chrono::_V2::system_clock::time_point job_acquire = std::chrono::high_resolution_clock::now();
 	calc.finish();
-
+	std::cout << "calc finish" << std::endl;
+	std::chrono::_V2::system_clock::time_point job_finish = std::chrono::high_resolution_clock::now();
 	std::chrono::_V2::system_clock::time_point end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float> duration = end - start;
-	float calcTime = TimerSurfaceArea::getInstance().times[0].count();
-	TimerSurfaceArea::getInstance().reset();
-	TimerSurfaceArea::getInstance().timing = false;
-
+	std::cout << "job request: " << std::chrono::duration<float> (job_request - start).count() << std::endl;
+	std::cout << "job submit: " << std::chrono::duration<float> (job_submit - job_request).count() << std::endl;
+	std::cout << "job acquire: " << std::chrono::duration<float> (job_acquire - job_submit).count() << std::endl;
+	std::cout << "job finish: " << std::chrono::duration<float> (job_finish - job_acquire).count() << std::endl;
 	float area = r->surface_area;
 	std::cout << name << " area: " << area << std::endl;
-	std::cout << std::left << std::setw(11) << "time: " << duration.count() << std::endl;
-	std::cout << "calc time: " << calcTime << std::endl;
+	std::cout << "time: " << duration.count() << std::endl;
+
 	BOOST_TEST(area == area_control, tt::tolerance(tolerance));
 }
 
-void time_cif(std::string name, std::string filename, int sets, int reps)
-{
-	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/" + filename;
-	CifFile geom = CifFile(path);
-	geom.parse();
-
-	AtomGroup *atomgroup = geom.atoms();
-	BondCalculator calc;
-	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
-	calc.addAnchorExtension(atomgroup->chosenAnchor());
-
-	calc.setup();
-	calc.start();
-
-	Job job{};
-	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
-
-	std::vector<std::chrono::duration<float>> times;
-	std::vector<float> avgSets;
-	std::vector<float> stdDevSets;
-	TimerSurfaceArea::getInstance().timing = true;
-
-	std::cout << "\nTIMING " << name << " SURFACE AREA CALCULATION" << 
-	std::endl;
-
-	for (int i = 0; i < sets; i++)
-	{
-		for (int j = 0; j < reps; j++)
-		{
-			calc.submitJob(job);
-			Result *r = calc.acquireResult();
-		}
-	}
-
-	times = TimerSurfaceArea::getInstance().times;
-	TimerSurfaceArea::getInstance().reset();
-	TimerSurfaceArea::getInstance().timing = false;
-
-	for (int i = 0; i < sets; i++)
-	{
-		float avg = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			avg += times[i*reps + j].count();
-		}
-		avg = avg / reps;
-		float stdDev = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			stdDev += pow(times[i*reps + j].count() - avg, 2);
-		}
-		stdDev = sqrt(stdDev / reps);
-		avgSets.push_back(avg);
-		stdDevSets.push_back(stdDev);
-		// std::cout << "run " << i << "\t" << "average: " << avg << "\t" << "standard deviation: " << stdDev << std::endl;
-		std::cout << std::left << std::setw(6) << "run " << i
-              << std::setw(12) << "  average: " << std::fixed << std::setprecision(9) << avg 
-              << std::setw(22) << "  standard deviation: " << std::fixed << std::setprecision(9) << stdDev << std::endl;
-	}
-	
-	float total_avg = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		total_avg += avgSets[i];
-	}
-	total_avg = total_avg / sets;
-
-	float avg_stdDev = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		avg_stdDev += stdDevSets[i];
-	}
-	avg_stdDev = avg_stdDev / sets;
-
-	// std::cout << "TOTAL" << "\t" << "run average: " << total_avg << "\t" << "average standard deviation: " << avg_stdDev << std::endl;
-	std::cout << std::left << std::setw(6) << "TOTAL" 
-          << std::setw(13) << "   run avg: " << std::fixed << std::setprecision(9) << total_avg 
-          << std::setw(22) << "  avg std deviation: " << std::fixed << std::setprecision(9) << avg_stdDev << std::endl;
-
-	calc.finish();
-}
-
-void time_pdb(std::string name, std::string filename, int sets, int reps)
-{
-	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/" + filename;
-	PdbFile pdb(path);
-	pdb.parse();
-
-	AtomGroup *atomgroup = pdb.atoms();
-	std::vector<AtomGroup *> subGroups = atomgroup->connectedGroups();
-
-	BondCalculator calc;
-	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
-	for (AtomGroup *group : subGroups)
-	{
-		calc.addAnchorExtension(group->chosenAnchor());
-	}
-	calc.setup();
-	calc.start();
-
-	Job job{};
-	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
-
-	std::vector<std::chrono::duration<float>> times;
-	std::vector<float> avgSets;
-	std::vector<float> stdDevSets;
-	TimerSurfaceArea::getInstance().timing = true;
-
-	std::cout << "\nTIMING " << name << " SURFACE AREA CALCULATION" << 
-	std::endl;
-
-	for (int i = 0; i < sets; i++)
-	{
-		for (int j = 0; j < reps; j++)
-		{
-			calc.submitJob(job);
-			Result *r = calc.acquireResult();
-		}
-	}
-
-	times = TimerSurfaceArea::getInstance().times;
-	TimerSurfaceArea::getInstance().reset();
-	TimerSurfaceArea::getInstance().timing = false;
-
-	for (int i = 0; i < sets; i++)
-	{
-		float avg = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			avg += times[i*reps + j].count();
-		}
-		avg = avg / reps;
-		float stdDev = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			stdDev += pow(times[i*reps + j].count() - avg, 2);
-		}
-		stdDev = sqrt(stdDev / reps);
-		avgSets.push_back(avg);
-		stdDevSets.push_back(stdDev);
-		// std::cout << "run " << i << "\t" << "average: " << avg << "\t" << "standard deviation: " << stdDev << std::endl;
-		std::cout << std::left << std::setw(6) << "run " << i
-              << std::setw(12) << "  average: " << std::fixed << std::setprecision(9) << avg 
-              << std::setw(22) << "  standard deviation: " << std::fixed << std::setprecision(9) << stdDev << std::endl;
-	}
-	
-	float total_avg = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		total_avg += avgSets[i];
-	}
-	total_avg = total_avg / sets;
-
-	float avg_stdDev = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		avg_stdDev += stdDevSets[i];
-	}
-	avg_stdDev = avg_stdDev / sets;
-
-	// std::cout << "TOTAL" << "\t" << "run average: " << total_avg << "\t" << "average standard deviation: " << avg_stdDev << std::endl;
-	std::cout << std::left << std::setw(6) << "TOTAL" 
-          << std::setw(13) << "   run avg: " << std::fixed << std::setprecision(9) << total_avg 
-          << std::setw(22) << "  avg std deviation: " << std::fixed << std::setprecision(9) << avg_stdDev << std::endl;
-
-	calc.finish();
-}
-
-void time_pdb2(std::string name, std::string filename, int sets, int reps)
-{
-	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/" + filename;
-	PdbFile pdb(path);
-	pdb.parse();
-
-	AtomGroup *atomgroup = pdb.atoms();
-	std::vector<AtomGroup *> subGroups = atomgroup->connectedGroups();
-
-	BondCalculator calc;
-	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
-	for (AtomGroup *group : subGroups)
-	{
-		calc.addAnchorExtension(group->chosenAnchor());
-	}
-	calc.setup();
-	calc.start();
-
-	Job job{};
-	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
-
-	std::vector<std::chrono::duration<float>> times;
-	std::vector<float> avgSets;
-	std::vector<float> stdDevSets;
-	TimerSurfaceArea::getInstance().timing = true;
-	TimerSurfaceArea::getInstance().loops = reps * sets;
-
-	std::cout << "\nTIMING " << name << " SURFACE AREA CALCULATION" << 
-	std::endl;
-
-	calc.submitJob(job);
-	Result *r = calc.acquireResult();
-
-	times = TimerSurfaceArea::getInstance().times;
-	TimerSurfaceArea::getInstance().reset();
-	TimerSurfaceArea::getInstance().timing = false;
-
-	for (int i = 0; i < sets; i++)
-	{
-		float avg = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			avg += times[i*reps + j].count();
-		}
-		avg = avg / reps;
-		float stdDev = 0.0f;
-		for (int j = 0; j < reps; j++)
-		{
-			stdDev += pow(times[i*reps + j].count() - avg, 2);
-		}
-		stdDev = sqrt(stdDev / reps);
-		avgSets.push_back(avg);
-		stdDevSets.push_back(stdDev);
-		// std::cout << "run " << i << "\t" << "average: " << avg << "\t" << "standard deviation: " << stdDev << std::endl;
-		std::cout << std::left << std::setw(6) << "run " << i
-              << std::setw(12) << "  average: " << std::fixed << std::setprecision(9) << avg 
-              << std::setw(22) << "  standard deviation: " << std::fixed << std::setprecision(9) << stdDev << std::endl;
-	}
-	
-	float total_avg = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		total_avg += avgSets[i];
-	}
-	total_avg = total_avg / sets;
-
-	float avg_stdDev = 0.0f;
-	for (int i = 0; i < sets; i++)
-	{
-		avg_stdDev += stdDevSets[i];
-	}
-	avg_stdDev = avg_stdDev / sets;
-
-	// std::cout << "TOTAL" << "\t" << "run average: " << total_avg << "\t" << "average standard deviation: " << avg_stdDev << std::endl;
-	std::cout << std::left << std::setw(6) << "TOTAL" 
-          << std::setw(13) << "   run avg: " << std::fixed << std::setprecision(9) << total_avg 
-          << std::setw(22) << "  avg std deviation: " << std::fixed << std::setprecision(9) << avg_stdDev << std::endl;
-
-	calc.finish();
-}
 
 BOOST_AUTO_TEST_CASE(glycine_surface_area)
 {
@@ -754,39 +504,151 @@ BOOST_AUTO_TEST_CASE(lysozyme_surface_area)
 	test_pdb("lysozyme", "1gwd.pdb", 7277.73f, 1e-2f); //6516.170f
 }
 
-BOOST_AUTO_TEST_CASE(profilin_surface_area)
+BOOST_AUTO_TEST_CASE(myoglobin)
 {
-	test_pdb("profilin", "1a0k.pdb", 6812.57422f, 1e-2f);
+	test_pdb("myoglobin", "1tes.pdb", 9876.79f, 1e-2f); //8296.582f
 }
 
-// BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
+// BOOST_AUTO_TEST_CASE(time_glycine)
 // {
-// 	test_pdb("hemoglobin", "pdb2h35.ent", 28211.436f, 1e-2f);
+// 	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/GLY.cif";
+// 	CifFile geom = CifFile(path);
+// 	geom.parse();
+  
+// 	AtomGroup *glycine = geom.atoms();
+// 	BondCalculator calc;
+// 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+// 	calc.addAnchorExtension(glycine->chosenAnchor()); 
+  
+// 	calc.setup();
+// 	calc.start();
+
+// 	Job job{};
+// 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+// 	//do 5 runs of repeating the code block 500 times and taking the average time and standard deviaton
+// 	std::vector<float> times;
+// 	std::vector<float> avgs;
+// 	std::vector<float> stdDevs;
+// 	std::cout << "\nTIMING GLYCINE SURFACE AREA CALCULATION" << std::endl;
+// 	for (int i = 0; i < 5; i++)
+// 	{
+// 		for (int j = 0; j < 500; j++)
+// 		{
+// 			auto start = std::chrono::high_resolution_clock::now();
+// 			calc.submitJob(job);
+// 			Result *r = calc.acquireResult();
+// 			auto end = std::chrono::high_resolution_clock::now();
+// 			std::chrono::duration<float> duration = end - start;
+// 			times.push_back(duration.count());
+// 		}
+// 		float avg = 0.0f;
+// 		for (int i = 0; i < times.size(); i++)
+// 		{
+// 			avg += times[i];
+// 		}
+// 		avg = avg / times.size();
+// 		float stdDev = 0.0f;
+// 		for (int i = 0; i < times.size(); i++)
+// 		{
+// 			stdDev += pow(times[i] - avg, 2);
+// 		}
+// 		stdDev = sqrt(stdDev / times.size());
+// 		avgs.push_back(avg);
+// 		stdDevs.push_back(stdDev);
+// 		std::cout << "RUN " << i << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+// 	}
+// 	float avg = 0.0f;
+// 	for (int i = 0; i < avgs.size(); i++)
+// 	{
+// 		avg += avgs[i];
+// 	}
+// 	avg = avg / avgs.size();
+// 	float stdDev = 0.0f;
+// 	for (int i = 0; i < avgs.size(); i++)
+// 	{
+// 		stdDev += pow(avgs[i] - avg, 2);
+// 	}
+// 	stdDev = sqrt(stdDev / avgs.size());
+// 	std::cout << "TOTAL" << "\t" << "run avg: " << avg << "\t" << "run stdDev: " << stdDev << std::endl;
+
+// 	calc.finish();
 // }
 
-BOOST_AUTO_TEST_CASE(time_glycine)
-{
-	time_cif("glycine", "GLY.cif", 5, 500);  
-}
+// BOOST_AUTO_TEST_CASE(time_lysozyme)
+// {
+// 	std::string path = "/home/iko/UNI/BA-BSC/ROPE/molecule_files/1gwd.pdb";
+// 	PdbFile pdb(path);
+// 	pdb.parse();
+  
+// 	AtomGroup *lysozyme = pdb.atoms();
+// 	std::vector<AtomGroup *> subGroups = lysozyme->connectedGroups();
 
-BOOST_AUTO_TEST_CASE(time_lysozyme)
-{
-	time_pdb("lysozyme", "1gwd.pdb", 2, 2);
-}
+// 	BondCalculator calc;
+// 	calc.setPipelineType(BondCalculator::PipelineSolventSurfaceArea);
+// 	for (AtomGroup *group : subGroups)
+// 	{
+// 		calc.addAnchorExtension(group->chosenAnchor());
+// 	}
+// 	calc.setup();
+// 	calc.start();
 
-BOOST_AUTO_TEST_CASE(time_profilin)
-{
-	time_pdb("profilin", "1a0k.pdb", 2, 2);
-}
+// 	Job job{};
+// 	job.requests = static_cast<JobType>(JobSolventSurfaceArea);
+  
+// 	//do 5 runs of repeating the code block 10 times and taking the average time and standard deviaton
+// 	std::vector<float> times;
+// 	std::vector<float> avgs;
+// 	std::vector<float> stdDevs;
+// 	std::cout << "\nTIMING LYSOZYME SURFACE AREA CALCULATION" << std::endl;
+// 	for (int i = 0; i < 5; i++)
+// 	{
+// 		for (int j = 0; j < 5; j++)
+// 		{
+// 			auto start = std::chrono::high_resolution_clock::now();
+// 			calc.submitJob(job);
+// 			Result *r = calc.acquireResult();
+// 			auto end = std::chrono::high_resolution_clock::now();
+// 			std::chrono::duration<float> duration = end - start;
+// 			times.push_back(duration.count());
+// 		}
+// 		float avg = 0.0f;
+// 		for (int i = 0; i < times.size(); i++)
+// 		{
+// 			avg += times[i];
+// 		}
+// 		avg = avg / times.size();
+// 		float stdDev = 0.0f;
+// 		for (int i = 0; i < times.size(); i++)
+// 		{
+// 			stdDev += pow(times[i] - avg, 2);
+// 		}
+// 		stdDev = sqrt(stdDev / times.size());
+// 		avgs.push_back(avg);
+// 		stdDevs.push_back(stdDev);
+// 		std::cout << "RUN " << i << "\t" << "avg: " << avg << "\t" << "stdDev: " << stdDev << std::endl;
+// 	}
+// 	float avg = 0.0f;
+// 	for (int i = 0; i < avgs.size(); i++)
+// 	{
+// 		avg += avgs[i];
+// 	}
+// 	avg = avg / avgs.size();
+// 	float stdDev = 0.0f;
+// 	for (int i = 0; i < avgs.size(); i++)
+// 	{
+// 		stdDev += pow(avgs[i] - avg, 2);
+// 	}
+// 	stdDev = sqrt(stdDev / avgs.size());
+// 	std::cout << "TOTAL" << "\t" << "run avg: " << avg << "\t" << "run stdDev: " << stdDev << std::endl;
 
-BOOST_AUTO_TEST_CASE(time_profilin2)
-{
-	time_pdb2("profilin", "1a0k.pdb", 2, 2);
-}
+// 	calc.finish();
+// }
 
-BOOST_AUTO_TEST_CASE(time_lysozyme2)
+
+BOOST_AUTO_TEST_CASE(hemoglobin_surface_area)
 {
-	time_pdb2("lysozyme", "1gwd.pdb", 2, 2);  
+	test_pdb("hemoglobin", "pdb2h35.ent", 28211.436f, 1e-2f);
 }
 
 // BOOST_AUTO_TEST_CASE(albumin_surface_area)
